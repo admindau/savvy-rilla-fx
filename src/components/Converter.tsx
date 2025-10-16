@@ -1,5 +1,5 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 export default function Converter({
   rate,           // e.g., USD->SSP number

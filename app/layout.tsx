@@ -1,18 +1,25 @@
-// app/layout.tsx
-import './globals.css'
-import type { Metadata } from 'next'
-
 export const metadata = {
-  title: 'Savvy Rilla FX — USD→SSP (Official) & USD→SXP (Black Market)',
-  description: 'Live USD to SSP and SXP exchange rates with full historical data for South Sudan. Structured for Google rich results.',
-  openGraph: { title: 'Savvy Rilla FX', description: 'USD→SSP & USD→SXP with history', url: 'https://fx.savvyrilla.tech', siteName: 'Savvy Rilla FX', images: ['/opengraph-image.png'] },
-  alternates: { canonical: 'https://fx.savvyrilla.tech' },
-}
+  title: 'Savvy Rilla FX',
+  description: 'Immaculate, SSP-first FX API built for transparency and access.',
+  icons: [{ rel: 'icon', url: '/logo.png' }],
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const orgLd = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: 'Savvy Rilla Technologies',
+    url: 'https://fx.savvyrilla.tech',
+    logo: 'https://fx.savvyrilla.tech/logo.png',
+  };
+
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className="">
+        {/* Site-wide Organization schema */}
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd) }} />
+        {children}
+      </body>
     </html>
-  )
+  );
 }

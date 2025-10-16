@@ -5,19 +5,40 @@ import HistoryTable from '@/components/HistoryTable';
 export const revalidate = 300;
 export const dynamic = 'force-dynamic';
 
+export const metadata = {
+  title: 'USD to SSP — Today (Official) | Savvy Rilla FX',
+  description: 'Live USD to SSP official exchange rate with full historical data from Savvy Rilla FX.',
+  alternates: { canonical: 'https://fx.savvyrilla.tech/usd-to-ssp' },
+  openGraph: {
+    title: 'USD to SSP — Official Rate',
+    description: 'Live USD to SSP official exchange rate with full historical data.',
+    url: 'https://fx.savvyrilla.tech/usd-to-ssp',
+    siteName: 'Savvy Rilla FX',
+    images: ['/logo.png'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'USD to SSP — Official',
+    description: 'Live USD to SSP official exchange rate from Savvy Rilla FX.',
+    images: ['/logo.png'],
+  },
+};
+
 type Row = { rate_date: string; rate: number };
 
-function ldCurrent(usdToSsp: number, date: string) {
+function exchangeRateSchema(usdToSsp: number, date: string) {
   return {
     '@context': 'https://schema.org',
     '@type': 'ExchangeRateSpecification',
     name: 'USD to SSP exchange rate (official)',
-    description: `1 USD to SSP exchange rate on ${date}`,
+    description: `1 USD equals ${usdToSsp.toLocaleString()} SSP on ${date}`,
     currency: 'USD',
     currentExchangeRate: { '@type': 'UnitPriceSpecification', price: usdToSsp, priceCurrency: 'SSP' },
     validFrom: date,
+    provider: { '@type': 'Organization', name: 'Savvy Rilla FX', url: 'https://fx.savvyrilla.tech', logo: 'https://fx.savvyrilla.tech/logo.png' },
   };
 }
+
 function Spark({ points }: { points: number[] }) {
   if (!points.length) return null;
   const min = Math.min(...points), max = Math.max(...points);
@@ -31,9 +52,11 @@ function Spark({ points }: { points: number[] }) {
 export default async function Page() {
   const s = getSupabaseService();
 
+  // latest (invert: table stores 1 SSP = r USD; we display 1 USD = X SSP)
   const { data: latest } = await s
     .from('fx_latest').select('rate_date, rate').eq('base', 'SSP').eq('quote', 'USD').maybeSingle();
 
+  // FULL history (no date filter)
   const { data: hist } = await s
     .from('fx_rates').select('rate_date, rate').eq('base', 'SSP').eq('quote', 'USD')
     .order('rate_date', { ascending: true });
@@ -47,7 +70,7 @@ export default async function Page() {
   return (
     <main className="min-h-dvh p-8 text-white bg-black">
       {usdToSsp && (
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ldCurrent(usdToSsp, date)) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(exchangeRateSchema(usdToSsp, date)) }} />
       )}
 
       <h1 className="text-3xl font-bold">USD to SSP — Today (Official)</h1>
@@ -72,7 +95,7 @@ export default async function Page() {
           <HistoryTable rows={all} valueLabel="1 USD in SSP" />
 
           <p className="mt-8 opacity-80">
-            Black market rate? <a href="/usd-to-sxp" className="underline">USD → SXP</a>
+            Black market rate? <a className="underline" href="/usd-to-sxp">USD → SXP</a>
           </p>
         </>
       ) : (

@@ -5,19 +5,40 @@ import HistoryTable from '@/components/HistoryTable';
 export const revalidate = 300;
 export const dynamic = 'force-dynamic';
 
+export const metadata = {
+  title: 'USD to SXP — Today (Black Market) | Savvy Rilla FX',
+  description: 'Live USD to SXP black-market exchange rate with full historical data from Savvy Rilla FX.',
+  alternates: { canonical: 'https://fx.savvyrilla.tech/usd-to-sxp' },
+  openGraph: {
+    title: 'USD to SXP — Black Market',
+    description: 'Live USD to SXP black-market exchange rate with full historical data.',
+    url: 'https://fx.savvyrilla.tech/usd-to-sxp',
+    siteName: 'Savvy Rilla FX',
+    images: ['/logo.png'],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'USD to SXP — Black Market',
+    description: 'Live USD to SXP black-market exchange rate from Savvy Rilla FX.',
+    images: ['/logo.png'],
+  },
+};
+
 type Row = { rate_date: string; rate: number };
 
-function ldCurrent(usdToSxp: number, date: string) {
+function exchangeRateSchemaSxp(usdToSxp: number, date: string) {
   return {
     '@context': 'https://schema.org',
     '@type': 'ExchangeRateSpecification',
     name: 'USD to SXP exchange rate (black market)',
-    description: `1 USD to SXP exchange rate on ${date}`,
+    description: `1 USD equals ${usdToSxp.toLocaleString()} SXP on ${date}`,
     currency: 'USD',
     currentExchangeRate: { '@type': 'UnitPriceSpecification', price: usdToSxp, priceCurrency: 'SXP' },
     validFrom: date,
+    provider: { '@type': 'Organization', name: 'Savvy Rilla FX', url: 'https://fx.savvyrilla.tech', logo: 'https://fx.savvyrilla.tech/logo.png' },
   };
 }
+
 function Spark({ points }: { points: number[] }) {
   if (!points.length) return null;
   const min = Math.min(...points), max = Math.max(...points);
@@ -47,7 +68,7 @@ export default async function Page() {
   return (
     <main className="min-h-dvh p-8 text-white bg-black">
       {usdToSxp && (
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ldCurrent(usdToSxp, date)) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(exchangeRateSchemaSxp(usdToSxp, date)) }} />
       )}
 
       <h1 className="text-3xl font-bold">USD to SXP — Today (Black Market)</h1>
@@ -72,7 +93,7 @@ export default async function Page() {
           <HistoryTable rows={all} valueLabel="1 USD in SXP" />
 
           <p className="mt-8 opacity-80">
-            Official rate? <a href="/usd-to-ssp" className="underline">USD → SSP</a>
+            Official rate? <a className="underline" href="/usd-to-ssp">USD → SSP</a>
           </p>
         </>
       ) : (
