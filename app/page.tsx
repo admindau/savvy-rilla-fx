@@ -16,6 +16,10 @@ export default function Home() {
       <div className="max-w-3xl text-center space-y-6">
         <Image src="/branding/logo.png" alt="Savvy Rilla" width={220} height={220} priority />
         <h1 className="text-3xl font-bold">Savvy Rilla FX API</h1>
+        <p className="mt-4">
+  <a href="/usd-to-ssp" className="underline">USD → SSP today</a> ·{" "}
+  <a href="/usd-to-sxp" className="underline">USD → SXP (black market)</a>
+</p>
         <p className="opacity-80">
           Immaculate, SSP‑first FX API. Endpoints:
         </p>

@@ -1,5 +1,12 @@
 import { getSupabaseService } from '@/lib/supabase'
 import { parseString } from '@fast-csv/parse'
+import { revalidatePath } from 'next/cache'
+// ...
+// at the end of POST handler, when rows are inserted successfully:
+revalidatePath('/usd-to-ssp')
+revalidatePath('/usd-to-sxp')
+return new Response(JSON.stringify({ success:true, inserted: rows.length }), { status:200 })
+
 
 type RateRow = {
   rate_date: string
