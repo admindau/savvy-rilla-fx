@@ -1,41 +1,33 @@
-import Image from 'next/image'
-
-export const metadata = {
-  title: 'Savvy Rilla FX API',
-  description: 'SSP-first exchange rate API by Savvy Rilla Technologies',
-  openGraph: {
-    title: 'Savvy Rilla FX API',
-    description: 'SSP-first exchange rate API by Savvy Rilla Technologies',
-    images: ['/opengraph-image.png'],
-  },
-}
-
-export default function Home() {
+export default function Page() {
   return (
-    <main className="min-h-dvh flex flex-col items-center justify-center p-8 text-white bg-black">
-      <div className="max-w-3xl text-center space-y-6">
-        <Image src="/branding/logo.png" alt="Savvy Rilla" width={220} height={220} priority />
-        <h1 className="text-3xl font-bold">Savvy Rilla FX API</h1>
-        <p className="mt-4 text-white">
-  <a className="underline" href="/usd-to-ssp">USD → SSP today</a> ·{' '}
-  <a className="underline" href="/usd-to-sxp">USD → SXP (black market)</a>
-</p>
-        <p className="mt-4">
-  <a href="/usd-to-ssp" className="underline">USD → SSP today</a> ·{" "}
-  <a href="/usd-to-sxp" className="underline">USD → SXP (black market)</a>
-</p>
-        <p className="opacity-80">
-          Immaculate, SSP‑first FX API. Endpoints:
-        </p>
-        <pre className="bg-neutral-900 p-4 rounded-xl text-left overflow-auto">
-{`GET /api/v1/currencies
+    <main className="min-h-dvh bg-black text-white p-8">
+      <img src="/logo.png" alt="Savvy Rilla" width="160" height="160" className="mb-6" />
+      <h1 className="text-4xl font-bold mb-2">Savvy Rilla FX API</h1>
+      <p className="opacity-80">Immaculate, SSP-first FX API.</p>
+
+      {/* ONLY these two links — no duplicates */}
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 max-w-3xl">
+        <a href="/usd-to-ssp" className="rounded-2xl bg-zinc-900/60 p-5 hover:bg-zinc-900 transition">
+          <div className="text-xl font-semibold">USD → SSP (Official)</div>
+          <div className="opacity-75 text-sm mt-1">Today’s rate + full history</div>
+        </a>
+        <a href="/usd-to-sxp" className="rounded-2xl bg-zinc-900/60 p-5 hover:bg-zinc-900 transition">
+          <div className="text-xl font-semibold">USD → SXP (Black Market)</div>
+          <div className="opacity-75 text-sm mt-1">Today’s rate + full history</div>
+        </a>
+      </div>
+
+      <div className="mt-10">
+        <h2 className="text-2xl font-semibold mb-2">Endpoints</h2>
+        <pre className="bg-zinc-900/60 rounded-xl p-4 overflow-x-auto text-sm">
+GET /api/v1/currencies
 GET /api/v1/latest?base=SSP&symbols=USD,EUR
 GET /api/v1/convert?from=USD&to=SSP&amount=100
 GET /api/v1/timeseries?start=YYYY-MM-DD&end=YYYY-MM-DD&base=SSP&symbols=USD
 GET /api/v1/status
-POST /api/v1/admin/rates  (CSV or JSON)  header: x-internal-admin-token`}
+POST /api/v1/admin/rates   (CSV or JSON)   header: x-internal-admin-token
         </pre>
       </div>
     </main>
-  )
+  );
 }
