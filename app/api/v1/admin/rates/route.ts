@@ -1,7 +1,12 @@
 // app/api/v1/admin/rates/route.ts
 import { NextRequest } from 'next/server';
 import { getSupabaseService } from '@/lib/supabase';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath } from 'next/cache'
+// ...
+try {
+  revalidatePath('/usd-to-ssp')
+  revalidatePath('/usd-to-sxp')
+} catch {}
 
 export const runtime = 'nodejs'; // ensure not 'edge'
 
