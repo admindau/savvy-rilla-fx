@@ -1,73 +1,102 @@
-import { getSupabaseService } from '@/lib/supabase'
-import { parseString } from '@fast-csv/parse'
-import { revalidatePath } from 'next/cache'
-// ...
-// at the end of POST handler, when rows are inserted successfully:
-revalidatePath('/usd-to-ssp')
-revalidatePath('/usd-to-sxp')
-return new Response(JSON.stringify({ success:true, inserted: rows.length }), { status:200 })
+// app/api/v1/admin/rates/route.ts
+import { NextRequest } from 'next/server';
+import { getSupabaseService } from '@/lib/supabase';
+import { revalidatePath } from 'next/cache';
 
+export const runtime = 'nodejs'; // ensure not 'edge'
 
 type RateRow = {
-  rate_date: string
-  base: string
-  quote: string
-  rate: number
-  source_key: string
-}
+  rate_date: string;
+  base: string;   // 'SSP' or 'SXP'
+  quote: string;  // 'USD', 'EUR', ...
+  rate: number;   // 1 base = rate quote
+  source_key: string; // 'official_ssp' or 'black_market_ssp'
+};
 
-export const dynamic = 'force-dynamic'
-
-function unauthorized(): Response {
-  return new Response(JSON.stringify({ success:false, error:{ code:'UNAUTHORIZED', message:'invalid token' } }), { status:401 })
-}
-
-async function resolveSourceId(supabase: ReturnType<typeof getSupabaseService>, key: string): Promise<string> {
-  const { data, error } = await supabase.from('sources').select('id').eq('key', key).single()
-  if (error || !data) throw new Error(`Unknown source_key: ${key}`)
-  return data.id as string
-}
-
-function parseCsv(text: string): Promise<RateRow[]> {
-  return new Promise<RateRow[]>((resolve, reject) => {
-    const rows: RateRow[] = []
-    parseString<RateRow, RateRow>(text, { headers: true, trim: true })
-      .on('error', (e: unknown) => reject(e instanceof Error ? e : new Error('CSV parse error')))
-      .on('data', (r: RateRow) => rows.push(r))
-      .on('end', () => resolve(rows))
-  })
-}
-
-export async function POST(req: Request) {
-  const token = req.headers.get('x-internal-admin-token')
-  if (!token || token !== process.env.INTERNAL_ADMIN_TOKEN) return unauthorized()
-
-  const contentType = req.headers.get('content-type') ?? ''
-  let rows: RateRow[] = []
-  const supabase = getSupabaseService()
-
-  try {
-    if (contentType.includes('application/json')) {
-      const body = (await req.json()) as RateRow[] | RateRow
-      rows = Array.isArray(body) ? body : [body]
-    } else if (contentType.includes('text/csv')) {
-      const csv = await req.text()
-      rows = await parseCsv(csv)
-    } else {
-      return new Response(JSON.stringify({ success:false, error:{ code:'INVALID_PARAMETER', message:'Send JSON or text/csv' } }), { status:400 })
-    }
-
-    for (const r of rows) {
-      const srcId = await resolveSourceId(supabase, r.source_key)
-      const { error } = await supabase.from('fx_rates').upsert({
-        rate_date: r.rate_date, base: r.base, quote: r.quote, rate: r.rate, source_id: srcId
-      })
-      if (error) throw new Error(error.message)
-    }
-
-    return new Response(JSON.stringify({ success:true, inserted: rows.length }), { status:200 })
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : 'internal error'
-    return new Response(JSON.stringify({ success:false, error:{ code:'INTERNAL_ERROR', message: msg } }), { status:500 })
+export async function POST(req: NextRequest) {
+  // auth
+  const token = req.headers.get('x-internal-admin-token');
+  if (!token || token !== process.env.INTERNAL_ADMIN_TOKEN) {
+    return Response.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'invalid token' } }, { status: 401 });
   }
+
+  const contentType = req.headers.get('content-type') || '';
+  const supabase = getSupabaseService();
+
+  let rows: RateRow[] = [];
+
+  // --- parse body ---
+  if (contentType.includes('application/json')) {
+    try {
+      const body = await req.json();
+      if (!Array.isArray(body)) throw new Error('Body must be an array of rows');
+      rows = body;
+    } catch (e: any) {
+      return Response.json({ success: false, error: { code: 'BAD_JSON', message: e?.message ?? 'Invalid JSON' } }, { status: 400 });
+    }
+  } else if (contentType.includes('text/csv')) {
+    const text = await req.text();
+    // ultra-minimal CSV parser (rate_date,base,quote,rate,source_key)
+    const lines = text.trim().split(/\r?\n/);
+    const [h, ...data] = lines;
+    const headers = h.split(',').map(s => s.trim());
+    const idx = (k: string) => headers.indexOf(k);
+    if (['rate_date','base','quote','rate','source_key'].some(k => idx(k) === -1)) {
+      return Response.json({ success: false, error: { code: 'BAD_CSV', message: 'CSV must include rate_date,base,quote,rate,source_key' } }, { status: 400 });
+    }
+    rows = data.map(line => {
+      const cols = line.split(',').map(s => s.trim());
+      return {
+        rate_date: cols[idx('rate_date')],
+        base: cols[idx('base')],
+        quote: cols[idx('quote')],
+        rate: Number(cols[idx('rate')]),
+        source_key: cols[idx('source_key')],
+      } as RateRow;
+    });
+  } else {
+    return Response.json({ success: false, error: { code: 'UNSUPPORTED', message: 'Use application/json or text/csv' } }, { status: 415 });
+  }
+
+  if (rows.length === 0) {
+    return Response.json({ success: false, error: { code: 'EMPTY', message: 'No rows provided' } }, { status: 400 });
+  }
+
+  // --- map source_key -> source_id ---
+  const sourceKeys = Array.from(new Set(rows.map(r => r.source_key)));
+  const { data: sources, error: srcErr } = await supabase
+    .from('sources')
+    .select('id,key')
+    .in('key', sourceKeys);
+
+  if (srcErr) {
+    return Response.json({ success: false, error: { code: 'DB', message: srcErr.message } }, { status: 500 });
+  }
+  const idByKey = new Map((sources ?? []).map(s => [s.key, s.id]));
+  const toInsert = rows.map(r => ({
+    rate_date: r.rate_date,
+    base: r.base,
+    quote: r.quote,
+    rate: r.rate,
+    source_id: idByKey.get(r.source_key)!,
+  }));
+
+  // --- upsert on composite key ---
+  const { error } = await supabase
+    .from('fx_rates')
+    .upsert(toInsert, { onConflict: 'rate_date,base,quote,source_id' });
+
+  if (error) {
+    return Response.json({ success: false, error: { code: 'DB', message: error.message } }, { status: 500 });
+  }
+
+  // --- best-effort cache revalidation for SEO pages ---
+  try {
+    revalidatePath('/usd-to-ssp');
+    revalidatePath('/usd-to-sxp');
+  } catch {
+    // ignore; never fail the admin insert because of revalidation
+  }
+
+  return Response.json({ success: true, inserted: toInsert.length }, { status: 200 });
 }
