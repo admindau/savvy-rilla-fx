@@ -5,24 +5,31 @@ import HistoryTable from '@/components/HistoryTable';
 export const revalidate = 300;
 export const dynamic = 'force-dynamic';
 
-export const metadata = {
-  title: 'USD to SSP — Today (Official) | Savvy Rilla FX',
-  description: 'Live USD to SSP official exchange rate with full historical data from Savvy Rilla FX.',
-  alternates: { canonical: 'https://fx.savvyrilla.tech/usd-to-ssp' },
-  openGraph: {
-    title: 'USD to SSP — Official Rate',
-    description: 'Live USD to SSP official exchange rate with full historical data.',
-    url: 'https://fx.savvyrilla.tech/usd-to-ssp',
-    siteName: 'Savvy Rilla FX',
-    images: ['/logo.png'],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'USD to SSP — Official',
-    description: 'Live USD to SSP official exchange rate from Savvy Rilla FX.',
-    images: ['/logo.png'],
-  },
-};
+export async function generateMetadata() {
+  const res = await fetch('https://fx.savvyrilla.tech/api/v1/latest?base=SSP&symbols=USD', { cache: 'no-store' })
+  const data = await res.json()
+  const usdToSsp = data?.rates?.USD ? (1 / data.rates.USD).toFixed(2) : '—'
+
+  return {
+    title: `1 USD = ${usdToSsp} SSP — Today (Official) | Savvy Rilla FX`,
+    description: `Live USD to SSP official exchange rate: 1 USD = ${usdToSsp} SSP (today). See full history and daily trends on Savvy Rilla FX.`,
+    alternates: { canonical: 'https://fx.savvyrilla.tech/usd-to-ssp' },
+    openGraph: {
+      title: `1 USD = ${usdToSsp} SSP — Official Rate`,
+      description: `Live USD to SSP official exchange rate with full historical data.`,
+      url: 'https://fx.savvyrilla.tech/usd-to-ssp',
+      siteName: 'Savvy Rilla FX',
+      images: ['/logo.png'],
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `1 USD = ${usdToSsp} SSP — Official Rate`,
+      description: `Live USD to SSP official exchange rate from Savvy Rilla FX.`,
+      images: ['/logo.png'],
+    },
+  }
+}
+
 
 type Row = { rate_date: string; rate: number };
 
@@ -73,7 +80,9 @@ export default async function Page() {
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(exchangeRateSchema(usdToSsp, date)) }} />
       )}
 
-      <h1 className="text-3xl font-bold">USD to SSP — Today (Official)</h1>
+      <h1 className="text-3xl font-bold">
+  1 USD = {usdToSsp?.toLocaleString()} SSP — Today (Official)
+</h1>
 
       {usdToSsp ? (
         <>
