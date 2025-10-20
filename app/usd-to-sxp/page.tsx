@@ -123,6 +123,11 @@ export default async function Page() {
           <Converter rate={usdToSxp} fromLabel="United States Dollar (USD)" toLabel="South Sudan Pound (Black Market, SXP)" defaultAmount={1} />
           <div style={{ marginTop: 18 }}>
             <div className="muted">History</div>
+            {/* Trend Line */}
+    <section className="mt-8">
+           <h2 className="font-semibold mb-2">90-Day Trend</h2>
+             <RateChart data={series} color="#22c55e" />
+    </section>
             <Spark points={spark} />
           </div>
           <HistoryTable rows={all} valueLabel="1 USD in SXP" />
@@ -131,6 +136,7 @@ export default async function Page() {
       ) : (
         <p className="muted" style={{ marginTop: 14 }}>Rate unavailable right now.</p>
       )}
+      <RateSchema base="USD" quote="SXP" rate={usdToSxp ?? 0} date={series?.[series.length-1]?.date ?? new Date().toISOString().split('T')[0]} />
     </main>
   );
 }

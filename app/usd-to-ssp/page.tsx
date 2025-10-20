@@ -123,12 +123,19 @@ export default async function Page() {
             <div className="muted">History</div>
             <Spark points={spark} />
           </div>
+          {/* Trend Line */}
+      <section className="mt-8">
+          <h2 className="font-semibold mb-2">90-Day Trend</h2>
+              <RateChart data={series} color="#22c55e" />
+      </section>
+
           <HistoryTable rows={all} valueLabel="1 USD in SSP" />
           <p className="muted" style={{ marginTop: 20 }}>Black market rate? <a href="/usd-to-sxp">USD → SXP</a></p>
         </>
       ) : (
         <p className="muted" style={{ marginTop: 14 }}>Rate unavailable right now.</p>
       )}
+      <RateSchema base="USD" quote="SSP" rate={usdToSsp ?? 0} date={series?.[series.length-1]?.date ?? new Date().toISOString().split('T')[0]} />
     </main>
   );
 }
