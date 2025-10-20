@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+.next/
+out/
+.env
+.env.local
+.vercel/
+.vscode/
+.DS_Store
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# System files
+Thumbs.db
+Desktop.ini
+
+# OS-specific caches
+*.log
+*.tmp
+*.swp
+*.swo
+*.bak
