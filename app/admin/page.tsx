@@ -123,8 +123,8 @@ function FxTrendChart() {
     return points.slice(points.length - days);
   })();
 
-  // Smart Insight: latest vs previous
-  const smartInsight: string | null = (() => {
+  // Expanded Smart Insights
+  const insights = (() => {
     if (filteredPoints.length < 2) return null;
 
     const latest = filteredPoints[filteredPoints.length - 1];
@@ -132,52 +132,124 @@ function FxTrendChart() {
 
     if (!latest || !prev || prev.rateMid === 0) return null;
 
+    // Primary summary: latest vs previous
     const diff = latest.rateMid - prev.rateMid;
     const pct = (diff / prev.rateMid) * 100;
-
     const direction =
       Math.abs(diff) < 0.0001
         ? "unchanged"
         : diff > 0
         ? "higher"
         : "lower";
+    const signWord = diff > 0 ? "up" : diff < 0 ? "down" : "unchanged";
 
+    let primarySummary: string;
     if (direction === "unchanged") {
-      return `Latest ${selectedCurrency}/SSP mid rate is ${latest.rateMid.toLocaleString(
+      primarySummary = `Latest ${selectedCurrency}/SSP mid rate is ${latest.rateMid.toLocaleString(
         "en-US",
         { minimumFractionDigits: 4, maximumFractionDigits: 4 }
       )}, unchanged versus the previous fixing.`;
+    } else {
+      primarySummary = `Latest ${selectedCurrency}/SSP mid rate is ${latest.rateMid.toLocaleString(
+        "en-US",
+        { minimumFractionDigits: 4, maximumFractionDigits: 4 }
+      )}, ${signWord} ${Math.abs(pct).toFixed(
+        2
+      )}% compared to the previous fixing.`;
     }
 
-    const signWord = diff > 0 ? "up" : "down";
+    // High / low over the range
+    let high = filteredPoints[0].rateMid;
+    let low = filteredPoints[0].rateMid;
+    let highDate = filteredPoints[0].date;
+    let lowDate = filteredPoints[0].date;
 
-    return `Latest ${selectedCurrency}/SSP mid rate is ${latest.rateMid.toLocaleString(
-      "en-US",
-      { minimumFractionDigits: 4, maximumFractionDigits: 4 }
-    )}, ${signWord} ${Math.abs(pct).toFixed(
-      2
-    )}% compared to the previous fixing.`;
+    for (let i = 1; i < filteredPoints.length; i++) {
+      const p = filteredPoints[i];
+      if (p.rateMid > high) {
+        high = p.rateMid;
+        highDate = p.date;
+      }
+      if (p.rateMid < low) {
+        low = p.rateMid;
+        lowDate = p.date;
+      }
+    }
+
+    // Up / down day counts + volatility
+    let daysUp = 0;
+    let daysDown = 0;
+    const pctMoves: number[] = [];
+
+    for (let i = 1; i < filteredPoints.length; i++) {
+      const prevPoint = filteredPoints[i - 1];
+      const cur = filteredPoints[i];
+      const move = cur.rateMid - prevPoint.rateMid;
+
+      if (move > 0) daysUp++;
+      else if (move < 0) daysDown++;
+
+      if (prevPoint.rateMid !== 0) {
+        const pctMove = (move / prevPoint.rateMid) * 100;
+        pctMoves.push(Math.abs(pctMove));
+      }
+    }
+
+    const volatilityPct =
+      pctMoves.length > 0
+        ? pctMoves.reduce((sum, v) => sum + v, 0) / pctMoves.length
+        : 0;
+
+    // Overall trend vs first point
+    const first = filteredPoints[0];
+    let trendLabel = "range-bound";
+    if (first && first.rateMid !== 0) {
+      const overallPct =
+        ((latest.rateMid - first.rateMid) / first.rateMid) * 100;
+      if (overallPct > 1) trendLabel = "upward trend";
+      else if (overallPct < -1) trendLabel = "downward trend";
+    }
+
+    return {
+      primarySummary,
+      high,
+      highDate,
+      low,
+      lowDate,
+      daysUp,
+      daysDown,
+      volatilityPct,
+      trendLabel,
+    };
   })();
 
   if (loading) {
     return (
-      <p className="text-[11px] text-white/60">Loading {selectedCurrency}/SSP trend…</p>
+      <div className="mt-4 border-t border-white/10 pt-3">
+        <p className="text-[11px] text-white/60">
+          Loading {selectedCurrency}/SSP trend…
+        </p>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <p className="text-[11px] text-red-300">
-        {error || `Failed to load ${selectedCurrency}/SSP trend.`}
-      </p>
+      <div className="mt-4 border-t border-white/10 pt-3">
+        <p className="text-[11px] text-red-300">
+          {error || `Failed to load ${selectedCurrency}/SSP trend.`}
+        </p>
+      </div>
     );
   }
 
   if (!filteredPoints.length) {
     return (
-      <p className="text-[11px] text-white/60">
-        Not enough data yet to display a trend for {selectedCurrency}.
-      </p>
+      <div className="mt-4 border-t border-white/10 pt-3">
+        <p className="text-[11px] text-white/60">
+          Not enough data yet to display a trend for {selectedCurrency}.
+        </p>
+      </div>
     );
   }
 
@@ -291,11 +363,51 @@ function FxTrendChart() {
         </div>
       </div>
 
-      {/* Smart insight */}
-      {smartInsight && (
-        <p className="mb-2 text-[11px] text-white/80">
-          {smartInsight}
-        </p>
+      {/* Smart insights */}
+      {insights && (
+        <>
+          <p className="mb-2 text-[11px] text-white/80">
+            {insights.primarySummary}
+          </p>
+
+          <div className="mb-2 grid gap-2 sm:grid-cols-3 text-[11px]">
+            <div className="rounded-lg border border-white/15 bg-black/40 px-2 py-1.5">
+              <p className="text-white/60 mb-0.5">Range high / low</p>
+              <p className="font-mono">
+                {insights.high.toLocaleString("en-US", {
+                  minimumFractionDigits: 4,
+                  maximumFractionDigits: 4,
+                })}{" "}
+                /{" "}
+                {insights.low.toLocaleString("en-US", {
+                  minimumFractionDigits: 4,
+                  maximumFractionDigits: 4,
+                })}
+              </p>
+              <p className="text-[10px] text-white/50">
+                High {insights.highDate} · Low {insights.lowDate}
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-white/15 bg-black/40 px-2 py-1.5">
+              <p className="text-white/60 mb-0.5">Trend</p>
+              <p className="font-mono capitalize">{insights.trendLabel}</p>
+              <p className="text-[10px] text-white/50">
+                {insights.daysUp} up days · {insights.daysDown} down days
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-white/15 bg-black/40 px-2 py-1.5">
+              <p className="text-white/60 mb-0.5">Volatility</p>
+              <p className="font-mono">
+                {insights.volatilityPct.toFixed(2)}% avg daily move
+              </p>
+              <p className="text-[10px] text-white/50">
+                Based on absolute day-to-day changes
+              </p>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Chart */}
@@ -771,7 +883,7 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* Chart + controls + smart insight */}
+            {/* Chart + controls + smart insights */}
             <FxTrendChart />
           </section>
         </div>
