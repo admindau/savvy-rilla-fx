@@ -6,25 +6,40 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    // supabaseServer is already a SupabaseClient instance, not a function
     const supabase = supabaseServer;
 
     const { data, error } = await supabase
-      .from("ExchangeRates") // 🔁 Change this if your table name is different
-      .select("id, asOfDate, quoteCurrency, rateMid, isOfficial, created_at")
-      .order("asOfDate", { ascending: false })
+      .from("fx_daily_rates")
+      .select(
+        "id, as_of_date, base_currency, quote_currency, rate_mid, is_official, is_manual_override, created_at"
+      )
+      .order("as_of_date", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(20);
 
     if (error) {
       console.error("Error loading recent FX rates:", error);
       return NextResponse.json(
-        { error: "Failed to load recent FX rates", details: error.message },
+        {
+          error: "Failed to load recent FX rates",
+          details: error.message,
+        },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ data: data ?? [] }, { status: 200 });
+    const mapped = (data ?? []).map((row: any) => ({
+      id: row.id,
+      asOfDate: row.as_of_date,
+      baseCurrency: row.base_currency,
+      quoteCurrency: row.quote_currency,
+      rateMid: row.rate_mid,
+      isOfficial: row.is_official,
+      isManualOverride: row.is_manual_override,
+      created_at: row.created_at,
+    }));
+
+    return NextResponse.json({ data: mapped }, { status: 200 });
   } catch (err: any) {
     console.error("Unexpected error loading recent FX rates:", err);
     return NextResponse.json(
