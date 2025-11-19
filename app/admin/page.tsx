@@ -17,8 +17,10 @@ type FxRate = {
 };
 
 export default function AdminPage() {
+  // Auth gate state
   const [authChecked, setAuthChecked] = useState(false);
 
+  // Form state
   const [asOfDate, setAsOfDate] = useState<string>(() => {
     const d = new Date();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -29,9 +31,16 @@ export default function AdminPage() {
   const [rateMid, setRateMid] = useState<string>("");
   const [isOfficial, setIsOfficial] = useState<boolean>(true);
 
+  // Create/Edit state
+  const [editMode, setEditMode] = useState(false);
+  const [editingRateId, setEditingRateId] = useState<number | null>(null);
+  const [editingLabel, setEditingLabel] = useState<string | null>(null);
+
+  // Status messages
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [message, setMessage] = useState<string | null>(null);
 
+  // Table state
   const [rates, setRates] = useState<FxRate[]>([]);
   const [ratesState, setRatesState] = useState<"idle" | "loading" | "error">("idle");
   const [ratesError, setRatesError] = useState<string | null>(null);
@@ -74,7 +83,6 @@ export default function AdminPage() {
         }
       } catch {
         if (!cancelled) {
-          // If check fails hard, still push to login
           window.location.href = "/admin/login";
         }
       }
@@ -84,6 +92,24 @@ export default function AdminPage() {
       cancelled = true;
     };
   }, []);
+
+  function resetFormToCreate() {
+    const d = new Date();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const today = `${d.getFullYear()}-${mm}-${dd}`;
+
+    setAsOfDate(today);
+    setQuoteCurrency("USD");
+    setRateMid("");
+    setIsOfficial(true);
+
+    setEditMode(false);
+    setEditingRateId(null);
+    setEditingLabel(null);
+    setSaveState("idle");
+    setMessage(null);
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -120,8 +146,16 @@ export default function AdminPage() {
       }
 
       setSaveState("success");
-      setMessage(json?.message || "FX rate saved successfully.");
-      setRateMid("");
+      setMessage(
+        editMode
+          ? json?.message || "FX rate updated successfully."
+          : json?.message || "FX rate saved successfully."
+      );
+
+      // After save, stay on current values but exit edit mode
+      setEditMode(false);
+      setEditingRateId(null);
+      setEditingLabel(null);
 
       fetchRecentRates();
     } catch (err: any) {
@@ -130,6 +164,25 @@ export default function AdminPage() {
         err?.message ? `Unexpected error: ${err.message}` : "Unexpected error while saving FX rate.",
       );
     }
+  }
+
+  function handleEdit(rate: FxRate) {
+    setEditMode(true);
+    setEditingRateId(rate.id ?? null);
+
+    if (rate.asOfDate) setAsOfDate(rate.asOfDate);
+    if (rate.quoteCurrency) setQuoteCurrency(rate.quoteCurrency.toUpperCase());
+    if (typeof rate.rateMid === "number") {
+      setRateMid(rate.rateMid.toString());
+    } else {
+      setRateMid(String(rate.rateMid ?? ""));
+    }
+    setIsOfficial(Boolean(rate.isOfficial));
+
+    const label = `${rate.quoteCurrency} on ${rate.asOfDate}`;
+    setEditingLabel(label);
+    setSaveState("idle");
+    setMessage(null);
   }
 
   async function handleDelete(id?: number) {
@@ -151,6 +204,11 @@ export default function AdminPage() {
       if (!res.ok || json?.error) {
         alert(json?.error || json?.message || "Failed to delete FX rate.");
         return;
+      }
+
+      // If we deleted the one we're editing, reset the form
+      if (editingRateId === id) {
+        resetFormToCreate();
       }
 
       fetchRecentRates();
@@ -183,6 +241,22 @@ export default function AdminPage() {
           {/* LEFT – FORM */}
           <section>
             <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Editing banner */}
+              {editMode && editingLabel && (
+                <div className="rounded-lg border border-amber-400/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-100 flex items-center justify-between gap-2">
+                  <span>
+                    Editing rate for <span className="font-semibold">{editingLabel}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={resetFormToCreate}
+                    className="text-[11px] underline decoration-dotted underline-offset-2"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+
               {/* Date */}
               <div className="space-y-1.5">
                 <label className="block text-sm font-medium">As of date</label>
@@ -274,7 +348,13 @@ export default function AdminPage() {
                 disabled={saveState === "saving"}
                 className="w-full rounded-xl border border-white/40 bg-white text-black py-2.5 text-sm font-semibold tracking-wide disabled:opacity-60 disabled:cursor-not-allowed hover:bg-black hover:text-white hover:border-white transition-colors"
               >
-                {saveState === "saving" ? "Saving rate…" : "Save FX rate"}
+                {saveState === "saving"
+                  ? editMode
+                    ? "Updating rate…"
+                    : "Saving rate…"
+                  : editMode
+                  ? "Update FX rate"
+                  : "Save FX rate"}
               </button>
             </form>
 
@@ -378,7 +458,14 @@ export default function AdminPage() {
                               : "—"}
                           </span>
                         </td>
-                        <td className="py-1.5 pl-3 align-top text-right">
+                        <td className="py-1.5 pl-3 align-top text-right space-x-1">
+                          <button
+                            type="button"
+                            onClick={() => handleEdit(rate)}
+                            className="text-[10px] px-2 py-0.5 rounded-lg border border-white/40 text-white/80 hover:bg-white hover:text-black transition-colors"
+                          >
+                            Edit
+                          </button>
                           <button
                             type="button"
                             onClick={() => handleDelete(rate.id)}
