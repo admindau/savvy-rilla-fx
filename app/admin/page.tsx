@@ -14,7 +14,7 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 
-// Register Chart.js components once
+// Register Chart.js parts
 ChartJS.register(
   LineElement,
   PointElement,
@@ -43,11 +43,32 @@ type FxChartPoint = {
   rateMid: number;
 };
 
+type RangeKey = "30d" | "90d" | "365d" | "all";
+
+const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
+  { key: "30d", label: "30d" },
+  { key: "90d", label: "90d" },
+  { key: "365d", label: "365d" },
+  { key: "all", label: "All" },
+];
+
+const RANGE_DAYS: Record<RangeKey, number | null> = {
+  "30d": 30,
+  "90d": 90,
+  "365d": 365,
+  all: null,
+};
+
+const CURRENCY_OPTIONS = ["USD", "EUR", "KES", "GBP"];
+
 function FxTrendChart() {
+  const [selectedCurrency, setSelectedCurrency] = useState<string>("USD");
+  const [range, setRange] = useState<RangeKey>("90d");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [points, setPoints] = useState<FxChartPoint[]>([]);
 
+  // Load data whenever currency changes
   useEffect(() => {
     let cancelled = false;
 
@@ -56,7 +77,11 @@ function FxTrendChart() {
         setLoading(true);
         setError(null);
 
-        const res = await fetch("/api/admin/chart-data?quote=USD&limit=90");
+        const res = await fetch(
+          `/api/admin/chart-data?quote=${encodeURIComponent(
+            selectedCurrency
+          )}&limit=365`
+        );
         const json = await res.json();
 
         if (!res.ok || json?.error) {
@@ -86,38 +111,84 @@ function FxTrendChart() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedCurrency]);
+
+  // Apply date range filter (last N points)
+  const filteredPoints: FxChartPoint[] = (() => {
+    if (!points.length) return [];
+    const days = RANGE_DAYS[range];
+    if (days == null || points.length <= days) {
+      return points;
+    }
+    return points.slice(points.length - days);
+  })();
+
+  // Smart Insight: latest vs previous
+  const smartInsight: string | null = (() => {
+    if (filteredPoints.length < 2) return null;
+
+    const latest = filteredPoints[filteredPoints.length - 1];
+    const prev = filteredPoints[filteredPoints.length - 2];
+
+    if (!latest || !prev || prev.rateMid === 0) return null;
+
+    const diff = latest.rateMid - prev.rateMid;
+    const pct = (diff / prev.rateMid) * 100;
+
+    const direction =
+      Math.abs(diff) < 0.0001
+        ? "unchanged"
+        : diff > 0
+        ? "higher"
+        : "lower";
+
+    if (direction === "unchanged") {
+      return `Latest ${selectedCurrency}/SSP mid rate is ${latest.rateMid.toLocaleString(
+        "en-US",
+        { minimumFractionDigits: 4, maximumFractionDigits: 4 }
+      )}, unchanged versus the previous fixing.`;
+    }
+
+    const signWord = diff > 0 ? "up" : "down";
+
+    return `Latest ${selectedCurrency}/SSP mid rate is ${latest.rateMid.toLocaleString(
+      "en-US",
+      { minimumFractionDigits: 4, maximumFractionDigits: 4 }
+    )}, ${signWord} ${Math.abs(pct).toFixed(
+      2
+    )}% compared to the previous fixing.`;
+  })();
 
   if (loading) {
     return (
-      <p className="text-[11px] text-white/60">Loading USD/SSP trend…</p>
+      <p className="text-[11px] text-white/60">Loading {selectedCurrency}/SSP trend…</p>
     );
   }
 
   if (error) {
     return (
       <p className="text-[11px] text-red-300">
-        {error || "Failed to load USD/SSP trend."}
+        {error || `Failed to load ${selectedCurrency}/SSP trend.`}
       </p>
     );
   }
 
-  if (!points.length) {
+  if (!filteredPoints.length) {
     return (
       <p className="text-[11px] text-white/60">
-        Not enough data yet to display a trend.
+        Not enough data yet to display a trend for {selectedCurrency}.
       </p>
     );
   }
 
-  const labels = points.map((p) => p.date);
-  const dataValues = points.map((p) => p.rateMid);
+  const labels = filteredPoints.map((p) => p.date);
+  const dataValues = filteredPoints.map((p) => p.rateMid);
 
   const data = {
     labels,
     datasets: [
       {
-        label: "USD/SSP mid rate",
+        label: `${selectedCurrency}/SSP mid rate`,
         data: dataValues,
         borderColor: "#ffffff",
         backgroundColor: "rgba(255,255,255,0.12)",
@@ -183,8 +254,54 @@ function FxTrendChart() {
   };
 
   return (
-    <div className="mt-3 h-40 sm:h-48 md:h-56">
-      <Line data={data} options={options} />
+    <div className="mt-4 border-t border-white/10 pt-3">
+      {/* Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-1">
+          {CURRENCY_OPTIONS.map((cur) => (
+            <button
+              key={cur}
+              type="button"
+              onClick={() => setSelectedCurrency(cur)}
+              className={`px-2 py-0.5 rounded-full text-[10px] border ${
+                selectedCurrency === cur
+                  ? "bg-white text-black border-white"
+                  : "bg-black text-white/70 border-white/30 hover:border-white/70"
+              } transition-colors`}
+            >
+              {cur}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1">
+          {RANGE_OPTIONS.map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setRange(opt.key)}
+              className={`px-2 py-0.5 rounded-full text-[10px] border ${
+                range === opt.key
+                  ? "bg-white text-black border-white"
+                  : "bg-black text-white/70 border-white/30 hover:border-white/70"
+              } transition-colors`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Smart insight */}
+      {smartInsight && (
+        <p className="mb-2 text-[11px] text-white/80">
+          {smartInsight}
+        </p>
+      )}
+
+      {/* Chart */}
+      <div className="h-40 sm:h-48 md:h-56">
+        <Line data={data} options={options} />
+      </div>
     </div>
   );
 }
@@ -334,7 +451,7 @@ export default function AdminPage() {
     } catch (err: any) {
       setSaveState("error");
       setMessage(
-        err?.message ? `Unexpected error: ${err.message}` : "Unexpected error while saving FX rate.",
+        err?.message ? `Unexpected error: ${err.message}` : "Unexpected error while saving FX rate."
       );
     }
   }
@@ -654,15 +771,8 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* USD/SSP Trend chart */}
-            <div className="mt-4 border-t border-white/10 pt-3">
-              <div className="flex items-center justify-between mb-1">
-                <h3 className="text-[11px] font-semibold uppercase tracking-wide text-white/70">
-                  USD/SSP trend (mid rate)
-                </h3>
-              </div>
-              <FxTrendChart />
-            </div>
+            {/* Chart + controls + smart insight */}
+            <FxTrendChart />
           </section>
         </div>
       </div>

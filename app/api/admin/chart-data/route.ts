@@ -15,7 +15,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const quote = (url.searchParams.get("quote") || "USD").toUpperCase();
     const limitParam = url.searchParams.get("limit");
-    const limit = Number(limitParam || "90");
+    const limit = Number(limitParam || "365");
 
     const { data, error } = await supabaseServer
       .from("fx_daily_rates")
@@ -23,7 +23,7 @@ export async function GET(request: Request) {
       .eq("base_currency", "SSP")
       .eq("quote_currency", quote)
       .order("as_of_date", { ascending: true })
-      .limit(Number.isNaN(limit) ? 90 : limit);
+      .limit(Number.isNaN(limit) ? 365 : limit);
 
     if (error) {
       console.error("Error loading FX chart data:", error);
