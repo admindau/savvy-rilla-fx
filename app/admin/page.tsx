@@ -2,6 +2,28 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import {
+  Chart as ChartJS,
+  LineElement,
+  PointElement,
+  LinearScale,
+  CategoryScale,
+  Tooltip,
+  Filler,
+  Legend,
+} from "chart.js";
+import { Line } from "react-chartjs-2";
+
+// Register Chart.js components once
+ChartJS.register(
+  LineElement,
+  PointElement,
+  LinearScale,
+  CategoryScale,
+  Tooltip,
+  Filler,
+  Legend
+);
 
 type SaveState = "idle" | "saving" | "success" | "error";
 
@@ -15,6 +37,157 @@ type FxRate = {
   isManualOverride?: boolean;
   created_at?: string;
 };
+
+type FxChartPoint = {
+  date: string;
+  rateMid: number;
+};
+
+function FxTrendChart() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [points, setPoints] = useState<FxChartPoint[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadChart() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const res = await fetch("/api/admin/chart-data?quote=USD&limit=90");
+        const json = await res.json();
+
+        if (!res.ok || json?.error) {
+          if (!cancelled) {
+            setError(json?.error || json?.message || "Failed to load chart data.");
+            setPoints([]);
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          setPoints(json.points ?? []);
+          setLoading(false);
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(err?.message || "Unexpected error while loading chart data.");
+          setPoints([]);
+          setLoading(false);
+        }
+      }
+    }
+
+    loadChart();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <p className="text-[11px] text-white/60">Loading USD/SSP trend…</p>
+    );
+  }
+
+  if (error) {
+    return (
+      <p className="text-[11px] text-red-300">
+        {error || "Failed to load USD/SSP trend."}
+      </p>
+    );
+  }
+
+  if (!points.length) {
+    return (
+      <p className="text-[11px] text-white/60">
+        Not enough data yet to display a trend.
+      </p>
+    );
+  }
+
+  const labels = points.map((p) => p.date);
+  const dataValues = points.map((p) => p.rateMid);
+
+  const data = {
+    labels,
+    datasets: [
+      {
+        label: "USD/SSP mid rate",
+        data: dataValues,
+        borderColor: "#ffffff",
+        backgroundColor: "rgba(255,255,255,0.12)",
+        pointRadius: 2,
+        pointHoverRadius: 4,
+        pointBackgroundColor: "#ffffff",
+        tension: 0.25,
+        fill: true,
+      },
+    ],
+  };
+
+  const options: any = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: {
+        ticks: {
+          color: "rgba(255,255,255,0.7)",
+          maxRotation: 0,
+          autoSkip: true,
+          maxTicksLimit: 6,
+        },
+        grid: {
+          color: "rgba(255,255,255,0.08)",
+        },
+      },
+      y: {
+        ticks: {
+          color: "rgba(255,255,255,0.7)",
+        },
+        grid: {
+          color: "rgba(255,255,255,0.08)",
+        },
+      },
+    },
+    plugins: {
+      legend: {
+        display: false,
+      },
+      tooltip: {
+        mode: "index" as const,
+        intersect: false,
+        backgroundColor: "rgba(0,0,0,0.9)",
+        borderColor: "rgba(255,255,255,0.2)",
+        borderWidth: 1,
+        titleColor: "#ffffff",
+        bodyColor: "#f5f5f5",
+        callbacks: {
+          label: (context: any) => {
+            const v = context.parsed.y;
+            if (typeof v === "number") {
+              return ` ${v.toLocaleString("en-US", {
+                minimumFractionDigits: 4,
+                maximumFractionDigits: 4,
+              })} SSP`;
+            }
+            return ` ${v} SSP`;
+          },
+        },
+      },
+    },
+  };
+
+  return (
+    <div className="mt-3 h-40 sm:h-48 md:h-56">
+      <Line data={data} options={options} />
+    </div>
+  );
+}
 
 export default function AdminPage() {
   // Auth gate state
@@ -364,8 +537,8 @@ export default function AdminPage() {
             </p>
           </section>
 
-          {/* RIGHT – RECENT RATES TABLE */}
-          <section className="border border-white/10 rounded-xl p-4 sm:p-5 bg-black/40">
+          {/* RIGHT – RECENT RATES TABLE + CHART */}
+          <section className="border border-white/10 rounded-xl p-4 sm:p-5 bg-black/40 flex flex-col">
             <div className="flex items-center justify-between mb-3 gap-3">
               <h2 className="text-sm font-semibold tracking-wide uppercase text-white/80">
                 Recent FX rates
@@ -480,6 +653,16 @@ export default function AdminPage() {
                 </table>
               </div>
             )}
+
+            {/* USD/SSP Trend chart */}
+            <div className="mt-4 border-t border-white/10 pt-3">
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-[11px] font-semibold uppercase tracking-wide text-white/70">
+                  USD/SSP trend (mid rate)
+                </h3>
+              </div>
+              <FxTrendChart />
+            </div>
           </section>
         </div>
       </div>
