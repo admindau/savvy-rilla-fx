@@ -6,10 +6,11 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const supabase = supabaseServer();
+    // supabaseServer is already a SupabaseClient instance, not a function
+    const supabase = supabaseServer;
 
     const { data, error } = await supabase
-      .from("ExchangeRates") // 🔁 If your table name is different, update this string.
+      .from("ExchangeRates") // 🔁 Change this if your table name is different
       .select("id, asOfDate, quoteCurrency, rateMid, isOfficial, created_at")
       .order("asOfDate", { ascending: false })
       .order("created_at", { ascending: false })
