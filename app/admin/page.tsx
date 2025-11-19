@@ -59,76 +59,135 @@ const RANGE_DAYS: Record<RangeKey, number | null> = {
   all: null,
 };
 
+// Currencies we support in overlay
 const CURRENCY_OPTIONS = ["USD", "EUR", "KES", "GBP"];
+
+// Simple color palette (still monochrome-friendly)
+const CURRENCY_COLORS: Record<string, string> = {
+  USD: "#ffffff",
+  EUR: "#cccccc",
+  KES: "#999999",
+  GBP: "#777777",
+};
 
 function FxTrendChart() {
   const [selectedCurrency, setSelectedCurrency] = useState<string>("USD");
+  const [activeCurrencies, setActiveCurrencies] = useState<string[]>(["USD"]);
   const [range, setRange] = useState<RangeKey>("90d");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [points, setPoints] = useState<FxChartPoint[]>([]);
+  const [series, setSeries] = useState<Record<string, FxChartPoint[]>>({});
 
-  // Load data whenever currency changes
+  // Helper to toggle currencies for overlay
+  function toggleCurrency(cur: string) {
+    setSelectedCurrency(cur);
+    setActiveCurrencies((prev) => {
+      if (prev.includes(cur)) {
+        // Don't allow turning off the last active currency
+        if (prev.length === 1) return prev;
+        return prev.filter((c) => c !== cur);
+      }
+      return [...prev, cur];
+    });
+  }
+
+  // Load all currencies once (overlay capable)
   useEffect(() => {
     let cancelled = false;
 
-    async function loadChart() {
+    async function loadAll() {
       try {
         setLoading(true);
         setError(null);
 
-        const res = await fetch(
-          `/api/admin/chart-data?quote=${encodeURIComponent(
-            selectedCurrency
-          )}&limit=365`
-        );
-        const json = await res.json();
+        const nextSeries: Record<string, FxChartPoint[]> = {};
 
-        if (!res.ok || json?.error) {
-          if (!cancelled) {
-            setError(json?.error || json?.message || "Failed to load chart data.");
-            setPoints([]);
-            setLoading(false);
+        for (const cur of CURRENCY_OPTIONS) {
+          try {
+            const res = await fetch(
+              `/api/admin/chart-data?quote=${encodeURIComponent(
+                cur
+              )}&limit=365`
+            );
+            const json = await res.json();
+
+            if (!res.ok || json?.error) {
+              console.error(
+                `Error loading FX chart data for ${cur}:`,
+                json?.error || json?.message
+              );
+              nextSeries[cur] = [];
+            } else {
+              nextSeries[cur] = json.points ?? [];
+            }
+          } catch (err: any) {
+            console.error(`Unexpected error loading FX chart data for ${cur}:`, err);
+            nextSeries[cur] = [];
           }
-          return;
         }
 
         if (!cancelled) {
-          setPoints(json.points ?? []);
+          setSeries(nextSeries);
           setLoading(false);
         }
       } catch (err: any) {
         if (!cancelled) {
-          setError(err?.message || "Unexpected error while loading chart data.");
-          setPoints([]);
+          setError(
+            err?.message || "Unexpected error while loading FX chart data."
+          );
+          setSeries({});
           setLoading(false);
         }
       }
     }
 
-    loadChart();
+    loadAll();
 
     return () => {
       cancelled = true;
     };
-  }, [selectedCurrency]);
+  }, []);
 
-  // Apply date range filter (last N points)
-  const filteredPoints: FxChartPoint[] = (() => {
+  // Apply range filter per-currency
+  function applyRangeFilter(points: FxChartPoint[]): FxChartPoint[] {
     if (!points.length) return [];
     const days = RANGE_DAYS[range];
     if (days == null || points.length <= days) {
       return points;
     }
     return points.slice(points.length - days);
-  })();
+  }
 
-  // Expanded Smart Insights
+  // Filtered series for all currencies
+  const filteredSeries: Record<string, FxChartPoint[]> = {};
+  CURRENCY_OPTIONS.forEach((cur) => {
+    const pts = series[cur];
+    if (pts && pts.length) {
+      const filtered = applyRangeFilter(pts);
+      if (filtered.length) {
+        filteredSeries[cur] = filtered;
+      }
+    }
+  });
+
+  // Build union of dates across active currencies for the x-axis
+  const dateSet = new Set<string>();
+  activeCurrencies.forEach((cur) => {
+    const pts = filteredSeries[cur];
+    if (pts) {
+      pts.forEach((p) => dateSet.add(p.date));
+    }
+  });
+
+  const labels = Array.from(dateSet).sort(); // YYYY-MM-DD so lexicographic is fine
+
+  // Expanded Smart Insights (for selectedCurrency only)
   const insights = (() => {
-    if (filteredPoints.length < 2) return null;
+    const pts = filteredSeries[selectedCurrency];
+    if (!pts || pts.length < 2) return null;
 
-    const latest = filteredPoints[filteredPoints.length - 1];
-    const prev = filteredPoints[filteredPoints.length - 2];
+    const latest = pts[pts.length - 1];
+    const prev = pts[pts.length - 2];
 
     if (!latest || !prev || prev.rateMid === 0) return null;
 
@@ -159,13 +218,13 @@ function FxTrendChart() {
     }
 
     // High / low over the range
-    let high = filteredPoints[0].rateMid;
-    let low = filteredPoints[0].rateMid;
-    let highDate = filteredPoints[0].date;
-    let lowDate = filteredPoints[0].date;
+    let high = pts[0].rateMid;
+    let low = pts[0].rateMid;
+    let highDate = pts[0].date;
+    let lowDate = pts[0].date;
 
-    for (let i = 1; i < filteredPoints.length; i++) {
-      const p = filteredPoints[i];
+    for (let i = 1; i < pts.length; i++) {
+      const p = pts[i];
       if (p.rateMid > high) {
         high = p.rateMid;
         highDate = p.date;
@@ -181,9 +240,9 @@ function FxTrendChart() {
     let daysDown = 0;
     const pctMoves: number[] = [];
 
-    for (let i = 1; i < filteredPoints.length; i++) {
-      const prevPoint = filteredPoints[i - 1];
-      const cur = filteredPoints[i];
+    for (let i = 1; i < pts.length; i++) {
+      const prevPoint = pts[i - 1];
+      const cur = pts[i];
       const move = cur.rateMid - prevPoint.rateMid;
 
       if (move > 0) daysUp++;
@@ -201,7 +260,7 @@ function FxTrendChart() {
         : 0;
 
     // Overall trend vs first point
-    const first = filteredPoints[0];
+    const first = pts[0];
     let trendLabel = "range-bound";
     if (first && first.rateMid !== 0) {
       const overallPct =
@@ -226,9 +285,7 @@ function FxTrendChart() {
   if (loading) {
     return (
       <div className="mt-4 border-t border-white/10 pt-3">
-        <p className="text-[11px] text-white/60">
-          Loading {selectedCurrency}/SSP trend…
-        </p>
+        <p className="text-[11px] text-white/60">Loading FX trends…</p>
       </div>
     );
   }
@@ -237,40 +294,50 @@ function FxTrendChart() {
     return (
       <div className="mt-4 border-t border-white/10 pt-3">
         <p className="text-[11px] text-red-300">
-          {error || `Failed to load ${selectedCurrency}/SSP trend.`}
+          {error || "Failed to load FX chart data."}
         </p>
       </div>
     );
   }
 
-  if (!filteredPoints.length) {
+  if (!labels.length) {
     return (
       <div className="mt-4 border-t border-white/10 pt-3">
         <p className="text-[11px] text-white/60">
-          Not enough data yet to display a trend for {selectedCurrency}.
+          Not enough data yet to display trends.
         </p>
       </div>
     );
   }
 
-  const labels = filteredPoints.map((p) => p.date);
-  const dataValues = filteredPoints.map((p) => p.rateMid);
+  // Build datasets for each active currency
+  const datasets = activeCurrencies
+    .filter((cur) => filteredSeries[cur] && filteredSeries[cur].length)
+    .map((cur) => {
+      const pts = filteredSeries[cur];
+      const values = labels.map((date) => {
+        const match = pts.find((p) => p.date === date);
+        return match ? match.rateMid : null;
+      });
+
+      const color = CURRENCY_COLORS[cur] || "#ffffff";
+
+      return {
+        label: `${cur}/SSP mid rate`,
+        data: values,
+        borderColor: color,
+        backgroundColor: "rgba(255,255,255,0.08)",
+        pointRadius: 2,
+        pointHoverRadius: 4,
+        pointBackgroundColor: color,
+        tension: 0.25,
+        fill: false,
+      };
+    });
 
   const data = {
     labels,
-    datasets: [
-      {
-        label: `${selectedCurrency}/SSP mid rate`,
-        data: dataValues,
-        borderColor: "#ffffff",
-        backgroundColor: "rgba(255,255,255,0.12)",
-        pointRadius: 2,
-        pointHoverRadius: 4,
-        pointBackgroundColor: "#ffffff",
-        tension: 0.25,
-        fill: true,
-      },
-    ],
+    datasets,
   };
 
   const options: any = {
@@ -299,7 +366,13 @@ function FxTrendChart() {
     },
     plugins: {
       legend: {
-        display: false,
+        display: true,
+        labels: {
+          color: "rgba(255,255,255,0.8)",
+          font: {
+            size: 10,
+          },
+        },
       },
       tooltip: {
         mode: "index" as const,
@@ -329,21 +402,32 @@ function FxTrendChart() {
     <div className="mt-4 border-t border-white/10 pt-3">
       {/* Controls */}
       <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <div className="flex items-center gap-1">
-          {CURRENCY_OPTIONS.map((cur) => (
-            <button
-              key={cur}
-              type="button"
-              onClick={() => setSelectedCurrency(cur)}
-              className={`px-2 py-0.5 rounded-full text-[10px] border ${
-                selectedCurrency === cur
-                  ? "bg-white text-black border-white"
-                  : "bg-black text-white/70 border-white/30 hover:border-white/70"
-              } transition-colors`}
-            >
-              {cur}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-1">
+          {CURRENCY_OPTIONS.map((cur) => {
+            const isSelected = selectedCurrency === cur;
+            const isActive = activeCurrencies.includes(cur);
+            return (
+              <button
+                key={cur}
+                type="button"
+                onClick={() => toggleCurrency(cur)}
+                className={`px-2 py-0.5 rounded-full text-[10px] border transition-colors ${
+                  isActive
+                    ? isSelected
+                      ? "bg-white text-black border-white"
+                      : "bg-black text-white border-white"
+                    : "bg-black text-white/40 border-white/20"
+                }`}
+                title={
+                  isActive
+                    ? `Click to focus on ${cur} (or toggle off overlay)`
+                    : `Click to add ${cur} to overlay`
+                }
+              >
+                {cur}
+              </button>
+            );
+          })}
         </div>
         <div className="flex items-center gap-1">
           {RANGE_OPTIONS.map((opt) => (
@@ -363,8 +447,8 @@ function FxTrendChart() {
         </div>
       </div>
 
-      {/* Smart insights */}
-      {insights && (
+      {/* Smart insights for selected currency */}
+      {insights ? (
         <>
           <p className="mb-2 text-[11px] text-white/80">
             {insights.primarySummary}
@@ -408,6 +492,10 @@ function FxTrendChart() {
             </div>
           </div>
         </>
+      ) : (
+        <p className="mb-2 text-[11px] text-white/60">
+          Not enough data for {selectedCurrency} to generate insights yet.
+        </p>
       )}
 
       {/* Chart */}
@@ -444,7 +532,9 @@ export default function AdminPage() {
 
   // Table state
   const [rates, setRates] = useState<FxRate[]>([]);
-  const [ratesState, setRatesState] = useState<"idle" | "loading" | "error">("idle");
+  const [ratesState, setRatesState] = useState<"idle" | "loading" | "error">(
+    "idle"
+  );
   const [ratesError, setRatesError] = useState<string | null>(null);
 
   async function fetchRecentRates() {
@@ -455,7 +545,9 @@ export default function AdminPage() {
       const json = await res.json();
       if (!res.ok || json?.error) {
         setRatesState("error");
-        setRatesError(json?.error || json?.message || "Failed to load recent FX rates.");
+        setRatesError(
+          json?.error || json?.message || "Failed to load recent FX rates."
+        );
         setRates([]);
         return;
       }
@@ -463,7 +555,9 @@ export default function AdminPage() {
       setRatesState("idle");
     } catch (err: any) {
       setRatesState("error");
-      setRatesError(err?.message || "Unexpected error while loading FX rates.");
+      setRatesError(
+        err?.message || "Unexpected error while loading FX rates."
+      );
       setRates([]);
     }
   }
@@ -563,7 +657,9 @@ export default function AdminPage() {
     } catch (err: any) {
       setSaveState("error");
       setMessage(
-        err?.message ? `Unexpected error: ${err.message}` : "Unexpected error while saving FX rate."
+        err?.message
+          ? `Unexpected error: ${err.message}`
+          : "Unexpected error while saving FX rate."
       );
     }
   }
@@ -647,7 +743,8 @@ export default function AdminPage() {
               {editMode && editingLabel && (
                 <div className="rounded-lg border border-amber-400/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-100 flex items-center justify-between gap-2">
                   <span>
-                    Editing rate for <span className="font-semibold">{editingLabel}</span>
+                    Editing rate for{" "}
+                    <span className="font-semibold">{editingLabel}</span>
                   </span>
                   <button
                     type="button"
@@ -669,16 +766,22 @@ export default function AdminPage() {
                   className="w-full rounded-lg bg-black border border-white/20 px-3 py-2 text-sm outline-none focus:border-white focus:ring-1 focus:ring-white"
                   required
                 />
-                <p className="text-xs text-white/60">Trading date the rate applies to.</p>
+                <p className="text-xs text-white/60">
+                  Trading date the rate applies to.
+                </p>
               </div>
 
               {/* Quote currency */}
               <div className="space-y-1.5">
-                <label className="block text-sm font-medium">Quote currency</label>
+                <label className="block text-sm font-medium">
+                  Quote currency
+                </label>
                 <input
                   type="text"
                   value={quoteCurrency}
-                  onChange={(e) => setQuoteCurrency(e.target.value.toUpperCase())}
+                  onChange={(e) =>
+                    setQuoteCurrency(e.target.value.toUpperCase())
+                  }
                   className="w-full rounded-lg bg-black border border-white/20 px-3 py-2 text-sm uppercase tracking-wide outline-none focus:border-white focus:ring-1 focus:ring-white"
                   placeholder="USD"
                   maxLength={10}
@@ -686,8 +789,9 @@ export default function AdminPage() {
                 />
                 <p className="text-xs text-white/60">
                   Example: <span className="font-mono">USD</span>,{" "}
-                  <span className="font-mono">EUR</span>, <span className="font-mono">KES</span>. Base
-                  is assumed to be SSP.
+                  <span className="font-mono">EUR</span>,{" "}
+                  <span className="font-mono">KES</span>. Base is assumed to be
+                  SSP.
                 </p>
               </div>
 
@@ -711,9 +815,12 @@ export default function AdminPage() {
               {/* Official flag */}
               <div className="flex items-center justify-between gap-3 border border-white/10 rounded-xl px-3 py-2">
                 <div>
-                  <p className="text-sm font-medium">Mark as official rate</p>
+                  <p className="text-sm font-medium">
+                    Mark as official rate
+                  </p>
                   <p className="text-xs text-white/60">
-                    If checked, this rate can be used as the official BoSS FX reference.
+                    If checked, this rate can be used as the official BoSS FX
+                    reference.
                   </p>
                 </div>
                 <button
@@ -761,8 +868,8 @@ export default function AdminPage() {
             </form>
 
             <p className="mt-6 text-[11px] text-center text-white/50">
-              For now this is a simple manual entry console. Later we can add tables, charts, and audit
-              trails.
+              For now this is a simple manual entry console. Later we can add
+              tables, charts, and audit trails.
             </p>
           </section>
 
@@ -782,7 +889,9 @@ export default function AdminPage() {
             </div>
 
             {ratesState === "loading" && (
-              <p className="text-xs text-white/60">Loading recent rates…</p>
+              <p className="text-xs text-white/60">
+                Loading recent rates…
+              </p>
             )}
 
             {ratesState === "error" && (
@@ -791,29 +900,46 @@ export default function AdminPage() {
               </p>
             )}
 
-            {ratesState !== "loading" && rates.length === 0 && !ratesError && (
-              <p className="text-xs text-white/60">No FX rates have been entered yet.</p>
-            )}
+            {ratesState !== "loading" &&
+              rates.length === 0 &&
+              !ratesError && (
+                <p className="text-xs text-white/60">
+                  No FX rates have been entered yet.
+                </p>
+              )}
 
             {rates.length > 0 && (
               <div className="mt-1 overflow-x-auto">
                 <table className="min-w-full text-xs border-collapse">
                   <thead>
                     <tr className="border-b border-white/15 text-white/70">
-                      <th className="text-left py-2 pr-3 font-medium">Date</th>
-                      <th className="text-left py-2 px-3 font-medium">Currency</th>
-                      <th className="text-right py-2 px-3 font-medium">Mid rate</th>
-                      <th className="text-center py-2 px-3 font-medium">Official</th>
+                      <th className="text-left py-2 pr-3 font-medium">
+                        Date
+                      </th>
+                      <th className="text-left py-2 px-3 font-medium">
+                        Currency
+                      </th>
+                      <th className="text-right py-2 px-3 font-medium">
+                        Mid rate
+                      </th>
+                      <th className="text-center py-2 px-3 font-medium">
+                        Official
+                      </th>
                       <th className="text-right py-2 px-3 font-medium whitespace-nowrap">
                         Created at
                       </th>
-                      <th className="text-right py-2 pl-3 font-medium">Actions</th>
+                      <th className="text-right py-2 pl-3 font-medium">
+                        Actions
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {rates.map((rate) => (
                       <tr
-                        key={rate.id ?? `${rate.asOfDate}-${rate.quoteCurrency}-${rate.created_at}`}
+                        key={
+                          rate.id ??
+                          `${rate.asOfDate}-${rate.quoteCurrency}-${rate.created_at}`
+                        }
                         className="border-b border-white/10 last:border-0"
                       >
                         <td className="py-1.5 pr-3 align-top">
@@ -850,7 +976,9 @@ export default function AdminPage() {
                         <td className="py-1.5 px-3 align-top text-right whitespace-nowrap">
                           <span className="font-mono text-[10px] text-white/70">
                             {rate.created_at
-                              ? new Date(rate.created_at).toLocaleString("en-GB", {
+                              ? new Date(
+                                  rate.created_at
+                                ).toLocaleString("en-GB", {
                                   year: "2-digit",
                                   month: "2-digit",
                                   day: "2-digit",
