@@ -4,7 +4,8 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { isAdminAuthenticated } from "@/lib/admin/auth";
 
 export async function POST(req: NextRequest) {
-  if (!isAdminAuthenticated()) {
+  const ok = await isAdminAuthenticated();
+  if (!ok) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -28,7 +29,6 @@ export async function POST(req: NextRequest) {
 
     const baseCurrency = "SSP";
 
-    // 1) Find the SAVVY_FEED source id
     const { data: sourceData, error: sourceError } = await supabaseServer
       .from("fx_sources")
       .select("id")
@@ -47,7 +47,6 @@ export async function POST(req: NextRequest) {
 
     const sourceId = sourceData.id;
 
-    // 2) Upsert into fx_daily_rates
     const { error: upsertError } = await supabaseServer
       .from("fx_daily_rates")
       .upsert(

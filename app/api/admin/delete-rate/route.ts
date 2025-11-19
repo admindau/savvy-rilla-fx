@@ -6,7 +6,8 @@ import { isAdminAuthenticated } from "@/lib/admin/auth";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  if (!isAdminAuthenticated()) {
+  const ok = await isAdminAuthenticated();
+  if (!ok) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
