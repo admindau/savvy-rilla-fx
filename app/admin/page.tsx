@@ -1,13 +1,21 @@
 // app/admin/page.tsx
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 type SaveState = "idle" | "saving" | "success" | "error";
 
+type FxRate = {
+  id?: number;
+  asOfDate: string;
+  quoteCurrency: string;
+  rateMid: number;
+  isOfficial: boolean;
+  created_at?: string;
+};
+
 export default function AdminPage() {
   const [asOfDate, setAsOfDate] = useState<string>(() => {
-    // default to today in YYYY-MM-DD
     const d = new Date();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
     const dd = String(d.getDate()).padStart(2, "0");
@@ -19,6 +27,35 @@ export default function AdminPage() {
 
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [message, setMessage] = useState<string | null>(null);
+
+  const [rates, setRates] = useState<FxRate[]>([]);
+  const [ratesState, setRatesState] = useState<"idle" | "loading" | "error">("idle");
+  const [ratesError, setRatesError] = useState<string | null>(null);
+
+  async function fetchRecentRates() {
+    try {
+      setRatesState("loading");
+      setRatesError(null);
+      const res = await fetch("/api/admin/recent-rates");
+      const json = await res.json();
+      if (!res.ok || json?.error) {
+        setRatesState("error");
+        setRatesError(json?.error || json?.message || "Failed to load recent FX rates.");
+        setRates([]);
+        return;
+      }
+      setRates(json?.data ?? []);
+      setRatesState("idle");
+    } catch (err: any) {
+      setRatesState("error");
+      setRatesError(err?.message || "Unexpected error while loading FX rates.");
+      setRates([]);
+    }
+  }
+
+  useEffect(() => {
+    fetchRecentRates();
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -56,22 +93,21 @@ export default function AdminPage() {
 
       setSaveState("success");
       setMessage(json?.message || "FX rate saved successfully.");
-
-      // Optionally clear rate only, keep date & currency
       setRateMid("");
+
+      // Refresh table after saving
+      fetchRecentRates();
     } catch (err: any) {
       setSaveState("error");
       setMessage(
-        err?.message
-          ? `Unexpected error: ${err.message}`
-          : "Unexpected error while saving FX rate.",
+        err?.message ? `Unexpected error: ${err.message}` : "Unexpected error while saving FX rate.",
       );
     }
   }
 
   return (
     <main className="min-h-screen bg-black text-white flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-xl border border-white/10 rounded-2xl p-6 sm:p-8 shadow-xl bg-white/5">
+      <div className="w-full max-w-4xl border border-white/10 rounded-2xl p-6 sm:p-8 shadow-xl bg-white/5">
         <header className="mb-6">
           <h1 className="text-2xl sm:text-3xl font-semibold text-center">
             Savvy Rilla FX – Admin
@@ -81,114 +117,212 @@ export default function AdminPage() {
           </p>
         </header>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Date */}
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium">
-              As of date
-            </label>
-            <input
-              type="date"
-              value={asOfDate}
-              onChange={(e) => setAsOfDate(e.target.value)}
-              className="w-full rounded-lg bg-black border border-white/20 px-3 py-2 text-sm outline-none focus:border-white focus:ring-1 focus:ring-white"
-              required
-            />
-            <p className="text-xs text-white/60">
-              Trading date the rate applies to.
-            </p>
-          </div>
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)]">
+          {/* LEFT – FORM */}
+          <section>
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Date */}
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium">As of date</label>
+                <input
+                  type="date"
+                  value={asOfDate}
+                  onChange={(e) => setAsOfDate(e.target.value)}
+                  className="w-full rounded-lg bg-black border border-white/20 px-3 py-2 text-sm outline-none focus:border-white focus:ring-1 focus:ring-white"
+                  required
+                />
+                <p className="text-xs text-white/60">Trading date the rate applies to.</p>
+              </div>
 
-          {/* Quote currency */}
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium">
-              Quote currency
-            </label>
-            <input
-              type="text"
-              value={quoteCurrency}
-              onChange={(e) => setQuoteCurrency(e.target.value.toUpperCase())}
-              className="w-full rounded-lg bg-black border border-white/20 px-3 py-2 text-sm uppercase tracking-wide outline-none focus:border-white focus:ring-1 focus:ring-white"
-              placeholder="USD"
-              maxLength={10}
-              required
-            />
-            <p className="text-xs text-white/60">
-              Example: <span className="font-mono">USD</span>,{" "}
-              <span className="font-mono">EUR</span>,{" "}
-              <span className="font-mono">KES</span>. Base is assumed to be SSP.
-            </p>
-          </div>
+              {/* Quote currency */}
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium">Quote currency</label>
+                <input
+                  type="text"
+                  value={quoteCurrency}
+                  onChange={(e) => setQuoteCurrency(e.target.value.toUpperCase())}
+                  className="w-full rounded-lg bg-black border border-white/20 px-3 py-2 text-sm uppercase tracking-wide outline-none focus:border-white focus:ring-1 focus:ring-white"
+                  placeholder="USD"
+                  maxLength={10}
+                  required
+                />
+                <p className="text-xs text-white/60">
+                  Example: <span className="font-mono">USD</span>,{" "}
+                  <span className="font-mono">EUR</span>, <span className="font-mono">KES</span>. Base
+                  is assumed to be SSP.
+                </p>
+              </div>
 
-          {/* Mid rate */}
-          <div className="space-y-1.5">
-            <label className="block text-sm font-medium">
-              Mid rate
-            </label>
-            <input
-              type="number"
-              step="0.0001"
-              value={rateMid}
-              onChange={(e) => setRateMid(e.target.value)}
-              className="w-full rounded-lg bg-black border border-white/20 px-3 py-2 text-sm outline-none focus:border-white focus:ring-1 focus:ring-white"
-              placeholder="1500.0000"
-              required
-            />
-            <p className="text-xs text-white/60">
-              SSP per {quoteCurrency || "quote currency"} (mid rate).
-            </p>
-          </div>
+              {/* Mid rate */}
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium">Mid rate</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={rateMid}
+                  onChange={(e) => setRateMid(e.target.value)}
+                  className="w-full rounded-lg bg-black border border-white/20 px-3 py-2 text-sm outline-none focus:border-white focus:ring-1 focus:ring-white"
+                  placeholder="1500.0000"
+                  required
+                />
+                <p className="text-xs text-white/60">
+                  SSP per {quoteCurrency || "quote currency"} (mid rate).
+                </p>
+              </div>
 
-          {/* Official flag */}
-          <div className="flex items-center justify-between gap-3 border border-white/10 rounded-xl px-3 py-2">
-            <div>
-              <p className="text-sm font-medium">Mark as official rate</p>
-              <p className="text-xs text-white/60">
-                If checked, this rate can be used as the official BoSS FX reference.
+              {/* Official flag */}
+              <div className="flex items-center justify-between gap-3 border border-white/10 rounded-xl px-3 py-2">
+                <div>
+                  <p className="text-sm font-medium">Mark as official rate</p>
+                  <p className="text-xs text-white/60">
+                    If checked, this rate can be used as the official BoSS FX reference.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsOfficial((prev) => !prev)}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border border-transparent transition-colors ${
+                    isOfficial ? "bg-white" : "bg-white/20"
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-black shadow ring-0 transition-transform ${
+                      isOfficial ? "translate-x-5" : "translate-x-0"
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Status message */}
+              {message && (
+                <div
+                  className={`text-sm rounded-lg px-3 py-2 ${
+                    saveState === "success"
+                      ? "bg-emerald-500/10 text-emerald-200 border border-emerald-500/40"
+                      : "bg-red-500/10 text-red-200 border border-red-500/40"
+                  }`}
+                >
+                  {message}
+                </div>
+              )}
+
+              {/* Submit button */}
+              <button
+                type="submit"
+                disabled={saveState === "saving"}
+                className="w-full rounded-xl border border-white/40 bg-white text-black py-2.5 text-sm font-semibold tracking-wide disabled:opacity-60 disabled:cursor-not-allowed hover:bg-black hover:text-white hover:border-white transition-colors"
+              >
+                {saveState === "saving" ? "Saving rate…" : "Save FX rate"}
+              </button>
+            </form>
+
+            <p className="mt-6 text-[11px] text-center text-white/50">
+              For now this is a simple manual entry console. Later we can add tables, charts, and audit
+              trails.
+            </p>
+          </section>
+
+          {/* RIGHT – RECENT RATES TABLE */}
+          <section className="border border-white/10 rounded-xl p-4 sm:p-5 bg-black/40">
+            <div className="flex items-center justify-between mb-3 gap-3">
+              <h2 className="text-sm font-semibold tracking-wide uppercase text-white/80">
+                Recent FX rates
+              </h2>
+              <button
+                type="button"
+                onClick={fetchRecentRates}
+                className="text-[11px] px-2 py-1 rounded-lg border border-white/20 hover:border-white hover:bg-white hover:text-black transition-colors"
+              >
+                Refresh
+              </button>
+            </div>
+
+            {ratesState === "loading" && (
+              <p className="text-xs text-white/60">Loading recent rates…</p>
+            )}
+
+            {ratesState === "error" && (
+              <p className="text-xs text-red-300">
+                {ratesError || "Failed to load recent FX rates."}
               </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsOfficial((prev) => !prev)}
-              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border border-transparent transition-colors ${
-                isOfficial ? "bg-white" : "bg-white/20"
-              }`}
-            >
-              <span
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-black shadow ring-0 transition-transform ${
-                  isOfficial ? "translate-x-5" : "translate-x-0"
-                }`}
-              />
-            </button>
-          </div>
+            )}
 
-          {/* Status message */}
-          {message && (
-            <div
-              className={`text-sm rounded-lg px-3 py-2 ${
-                saveState === "success"
-                  ? "bg-emerald-500/10 text-emerald-200 border border-emerald-500/40"
-                  : "bg-red-500/10 text-red-200 border border-red-500/40"
-              }`}
-            >
-              {message}
-            </div>
-          )}
+            {ratesState !== "loading" && rates.length === 0 && !ratesError && (
+              <p className="text-xs text-white/60">No FX rates have been entered yet.</p>
+            )}
 
-          {/* Submit button */}
-          <button
-            type="submit"
-            disabled={saveState === "saving"}
-            className="w-full rounded-xl border border-white/40 bg-white text-black py-2.5 text-sm font-semibold tracking-wide disabled:opacity-60 disabled:cursor-not-allowed hover:bg-black hover:text-white hover:border-white transition-colors"
-          >
-            {saveState === "saving" ? "Saving rate…" : "Save FX rate"}
-          </button>
-        </form>
-
-        <p className="mt-6 text-[11px] text-center text-white/50">
-          For now this is a simple manual entry console. Later we can add tables,
-          charts, and audit trails.
-        </p>
+            {rates.length > 0 && (
+              <div className="mt-1 overflow-x-auto">
+                <table className="min-w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-white/15 text-white/70">
+                      <th className="text-left py-2 pr-3 font-medium">Date</th>
+                      <th className="text-left py-2 px-3 font-medium">Currency</th>
+                      <th className="text-right py-2 px-3 font-medium">Mid rate</th>
+                      <th className="text-center py-2 px-3 font-medium">Official</th>
+                      <th className="text-right py-2 pl-3 font-medium whitespace-nowrap">
+                        Created at
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rates.map((rate) => (
+                      <tr
+                        key={rate.id ?? `${rate.asOfDate}-${rate.quoteCurrency}-${rate.created_at}`}
+                        className="border-b border-white/10 last:border-0"
+                      >
+                        <td className="py-1.5 pr-3 align-top">
+                          <span className="font-mono text-[11px]">
+                            {rate.asOfDate ?? "-"}
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-3 align-top">
+                          <span className="font-mono text-[11px]">
+                            {rate.quoteCurrency}
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-3 align-top text-right">
+                          <span className="font-mono text-[11px]">
+                            {typeof rate.rateMid === "number"
+                              ? rate.rateMid.toLocaleString("en-US", {
+                                  minimumFractionDigits: 4,
+                                  maximumFractionDigits: 4,
+                                })
+                              : rate.rateMid}
+                          </span>
+                        </td>
+                        <td className="py-1.5 px-3 align-top text-center">
+                          {rate.isOfficial ? (
+                            <span className="inline-flex items-center justify-center rounded-full border border-emerald-400/70 px-2 py-0.5 text-[10px] text-emerald-200">
+                              Official
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center justify-center rounded-full border border-white/30 px-2 py-0.5 text-[10px] text-white/70">
+                              Unofficial
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-1.5 pl-3 align-top text-right whitespace-nowrap">
+                          <span className="font-mono text-[10px] text-white/70">
+                            {rate.created_at
+                              ? new Date(rate.created_at).toLocaleString("en-GB", {
+                                  year: "2-digit",
+                                  month: "2-digit",
+                                  day: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })
+                              : "—"}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </div>
       </div>
     </main>
   );
