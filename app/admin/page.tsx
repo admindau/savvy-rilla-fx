@@ -8,9 +8,11 @@ type SaveState = "idle" | "saving" | "success" | "error";
 type FxRate = {
   id?: number;
   asOfDate: string;
+  baseCurrency?: string;
   quoteCurrency: string;
   rateMid: number;
   isOfficial: boolean;
+  isManualOverride?: boolean;
   created_at?: string;
 };
 
@@ -102,6 +104,34 @@ export default function AdminPage() {
       setMessage(
         err?.message ? `Unexpected error: ${err.message}` : "Unexpected error while saving FX rate.",
       );
+    }
+  }
+
+  async function handleDelete(id?: number) {
+    if (!id) return;
+    const confirmed = window.confirm("Delete this FX rate? This cannot be undone.");
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch("/api/admin/delete-rate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id }),
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok || json?.error) {
+        alert(json?.error || json?.message || "Failed to delete FX rate.");
+        return;
+      }
+
+      // Refresh list after delete
+      fetchRecentRates();
+    } catch (err: any) {
+      alert(err?.message || "Unexpected error while deleting FX rate.");
     }
   }
 
@@ -260,9 +290,10 @@ export default function AdminPage() {
                       <th className="text-left py-2 px-3 font-medium">Currency</th>
                       <th className="text-right py-2 px-3 font-medium">Mid rate</th>
                       <th className="text-center py-2 px-3 font-medium">Official</th>
-                      <th className="text-right py-2 pl-3 font-medium whitespace-nowrap">
+                      <th className="text-right py-2 px-3 font-medium whitespace-nowrap">
                         Created at
                       </th>
+                      <th className="text-right py-2 pl-3 font-medium">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -302,7 +333,7 @@ export default function AdminPage() {
                             </span>
                           )}
                         </td>
-                        <td className="py-1.5 pl-3 align-top text-right whitespace-nowrap">
+                        <td className="py-1.5 px-3 align-top text-right whitespace-nowrap">
                           <span className="font-mono text-[10px] text-white/70">
                             {rate.created_at
                               ? new Date(rate.created_at).toLocaleString("en-GB", {
@@ -314,6 +345,15 @@ export default function AdminPage() {
                                 })
                               : "—"}
                           </span>
+                        </td>
+                        <td className="py-1.5 pl-3 align-top text-right">
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(rate.id)}
+                            className="text-[10px] px-2 py-0.5 rounded-lg border border-red-500/60 text-red-200 hover:bg-red-500 hover:text-black hover:border-red-500 transition-colors"
+                          >
+                            Delete
+                          </button>
                         </td>
                       </tr>
                     ))}
