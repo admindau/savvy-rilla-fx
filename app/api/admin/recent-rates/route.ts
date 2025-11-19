@@ -1,10 +1,15 @@
 // app/api/admin/recent-rates/route.ts
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { isAdminAuthenticated } from "@/lib/admin/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  if (!isAdminAuthenticated()) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const supabase = supabaseServer;
 

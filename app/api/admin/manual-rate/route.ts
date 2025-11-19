@@ -1,8 +1,13 @@
 // app/api/admin/manual-rate/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { isAdminAuthenticated } from "@/lib/admin/auth";
 
 export async function POST(req: NextRequest) {
+  if (!isAdminAuthenticated()) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
 
@@ -14,8 +19,8 @@ export async function POST(req: NextRequest) {
     if (!asOfDate || !quoteCurrency || !rateMid || Number.isNaN(rateMid)) {
       return NextResponse.json(
         {
-          error:
-            "Missing or invalid fields. Required: asOfDate (YYYY-MM-DD), quoteCurrency, rateMid (number).",
+          error: "Missing or invalid fields",
+          details: "asOfDate, quoteCurrency, and numeric rateMid are required",
         },
         { status: 400 }
       );

@@ -17,6 +17,8 @@ type FxRate = {
 };
 
 export default function AdminPage() {
+  const [authChecked, setAuthChecked] = useState(false);
+
   const [asOfDate, setAsOfDate] = useState<string>(() => {
     const d = new Date();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -55,8 +57,32 @@ export default function AdminPage() {
     }
   }
 
+  // Check admin auth on mount
   useEffect(() => {
-    fetchRecentRates();
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/check");
+        if (res.status === 401 && !cancelled) {
+          window.location.href = "/admin/login";
+          return;
+        }
+        if (!cancelled) {
+          setAuthChecked(true);
+          fetchRecentRates();
+        }
+      } catch {
+        if (!cancelled) {
+          // If check fails hard, still push to login
+          window.location.href = "/admin/login";
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function handleSubmit(e: FormEvent) {
@@ -97,7 +123,6 @@ export default function AdminPage() {
       setMessage(json?.message || "FX rate saved successfully.");
       setRateMid("");
 
-      // Refresh table after saving
       fetchRecentRates();
     } catch (err: any) {
       setSaveState("error");
@@ -128,11 +153,18 @@ export default function AdminPage() {
         return;
       }
 
-      // Refresh list after delete
       fetchRecentRates();
     } catch (err: any) {
       alert(err?.message || "Unexpected error while deleting FX rate.");
     }
+  }
+
+  if (!authChecked) {
+    return (
+      <main className="min-h-screen bg-black text-white flex items-center justify-center">
+        <p className="text-sm text-white/70">Checking admin access…</p>
+      </main>
+    );
   }
 
   return (

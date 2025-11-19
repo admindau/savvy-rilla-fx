@@ -1,14 +1,19 @@
 // app/api/admin/delete-rate/route.ts
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { isAdminAuthenticated } from "@/lib/admin/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  if (!isAdminAuthenticated()) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await request.json().catch(() => null);
-
     const id = body?.id;
+
     if (!id || typeof id !== "number") {
       return NextResponse.json(
         { error: "Missing or invalid id in request body" },
@@ -16,9 +21,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const supabase = supabaseServer;
-
-    const { error } = await supabase
+    const { error } = await supabaseServer
       .from("fx_daily_rates")
       .delete()
       .eq("id", id);
