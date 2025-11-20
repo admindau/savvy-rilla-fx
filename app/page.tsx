@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import FxHistoryChart from "@/components/fx-history-chart";
 import {
   buildInsightsFromSummary,
   type MarketSummary,
@@ -102,17 +103,29 @@ async function fetchJson<T>(path: string): Promise<T | null> {
 }
 
 export default async function HomePage() {
-  const [latestRates, usdSummary, usdHistory, recentRates] =
-    await Promise.all([
-      fetchJson<LatestRatesResponse>("/api/v1/rates/latest?base=SSP"),
-      fetchJson<MarketSummary>(
-        "/api/v1/summary/market?base=SSP&quote=USD"
-      ),
-      fetchJson<HistoryResponse>(
-        "/api/v1/rates/history?base=SSP&quote=USD&days=30"
-      ),
-      fetchJson<RecentRatesResponse>("/api/v1/rates/recent?base=SSP&limit=10"),
-    ]);
+  const [
+    latestRates,
+    usdSummary,
+    history30,
+    history90,
+    history365,
+    recentRates,
+  ] = await Promise.all([
+    fetchJson<LatestRatesResponse>("/api/v1/rates/latest?base=SSP"),
+    fetchJson<MarketSummary>(
+      "/api/v1/summary/market?base=SSP&quote=USD"
+    ),
+    fetchJson<HistoryResponse>(
+      "/api/v1/rates/history?base=SSP&quote=USD&days=30"
+    ),
+    fetchJson<HistoryResponse>(
+      "/api/v1/rates/history?base=SSP&quote=USD&days=90"
+    ),
+    fetchJson<HistoryResponse>(
+      "/api/v1/rates/history?base=SSP&quote=USD&days=365"
+    ),
+    fetchJson<RecentRatesResponse>("/api/v1/rates/recent?base=SSP&limit=10"),
+  ]);
 
   const latestDate = latestRates?.as_of_date ?? "-";
   const latestBase = latestRates?.base ?? "SSP";
@@ -121,12 +134,12 @@ export default async function HomePage() {
   const usdChangePct = usdSummary?.change_pct_vs_previous ?? null;
 
   const usdMin30 =
-    usdHistory?.points && usdHistory.points.length > 0
-      ? Math.min(...usdHistory.points.map((p) => p.mid))
+    history30?.points && history30.points.length > 0
+      ? Math.min(...history30.points.map((p) => p.mid))
       : null;
   const usdMax30 =
-    usdHistory?.points && usdHistory.points.length > 0
-      ? Math.max(...usdHistory.points.map((p) => p.mid))
+    history30?.points && history30.points.length > 0
+      ? Math.max(...history30.points.map((p) => p.mid))
       : null;
 
   const latestRatesArray =
@@ -137,6 +150,24 @@ export default async function HomePage() {
       : [];
 
   const fxInsights = usdSummary ? buildInsightsFromSummary(usdSummary) : [];
+
+  const historySeries = [
+    {
+      label: "30d",
+      days: 30,
+      points: history30?.points ?? [],
+    },
+    {
+      label: "90d",
+      days: 90,
+      points: history90?.points ?? [],
+    },
+    {
+      label: "365d",
+      days: 365,
+      points: history365?.points ?? [],
+    },
+  ].filter((s) => s.points.length > 1);
 
   return (
     <main className="min-h-screen bg-black text-zinc-100">
@@ -306,10 +337,13 @@ export default async function HomePage() {
                   Trend (experimental)
                 </p>
                 <p className="text-zinc-200">
-                  {usdSummary?.trend?.label ?? "Range-bound"}
+                  {usdSummary?.trend?.label ?? "Range-Bound"}
                 </p>
               </div>
             </div>
+
+            {/* History chart */}
+            {historySeries.length > 0 && <FxHistoryChart series={historySeries} />}
 
             <p className="text-[0.7rem] text-zinc-500">
               Snapshot powered by{" "}
@@ -346,7 +380,7 @@ export default async function HomePage() {
 
         {/* FX Dashboard */}
         <section id="fx-dashboard" className="space-y-6">
-          <div className="flex flex-wrap items-end justify_between gap-3">
+          <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="text-[0.7rem] uppercase tracking-[0.25em] text-zinc-500">
                 FX dashboard
