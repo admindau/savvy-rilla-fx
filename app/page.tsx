@@ -1,3 +1,5 @@
+"use client";
+
 import Image from "next/image";
 
 export default function HomePage() {
@@ -17,7 +19,7 @@ export default function HomePage() {
         <div className="mx-auto mb-4 flex items-center justify-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-zinc-900/70 backdrop-blur-sm shadow-[0_0_60px_rgba(255,255,255,0.28)]">
             <Image
-              src="/savvy-gorilla-logo-white.png" // <-- update this path if your logo file is named differently
+              src="/savvy-gorilla-logo-white.png" // update path if needed
               alt="Savvy Gorilla Technologies"
               width={64}
               height={64}
