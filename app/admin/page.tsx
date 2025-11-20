@@ -66,6 +66,10 @@ const CURRENCY_COLORS: Record<string, string> = {
   GBP: "#777777",
 };
 
+/**
+ * FX TREND CHART + SMART INSIGHTS
+ * Lives on the LEFT under the Save FX rate button.
+ */
 function FxTrendChart() {
   const [selectedCurrency, setSelectedCurrency] = useState<string>("USD");
   const [activeCurrencies, setActiveCurrencies] = useState<string[]>(["USD"]);
@@ -78,7 +82,7 @@ function FxTrendChart() {
     setSelectedCurrency(cur);
     setActiveCurrencies((prev) => {
       if (prev.includes(cur)) {
-        if (prev.length === 1) return prev;
+        if (prev.length === 1) return prev; // never allow zero
         return prev.filter((c) => c !== cur);
       }
       return [...prev, cur];
@@ -269,7 +273,7 @@ function FxTrendChart() {
 
   if (loading) {
     return (
-      <div className="mt-3 border-t border-white/10 pt-2">
+      <div className="mt-3 border border-white/10 rounded-xl px-3 py-2">
         <p className="text-[11px] text-white/60">Loading FX trends…</p>
       </div>
     );
@@ -277,7 +281,7 @@ function FxTrendChart() {
 
   if (error) {
     return (
-      <div className="mt-3 border-t border-white/10 pt-2">
+      <div className="mt-3 border border-white/10 rounded-xl px-3 py-2">
         <p className="text-[11px] text-red-300">
           {error || "Failed to load FX chart data."}
         </p>
@@ -287,7 +291,7 @@ function FxTrendChart() {
 
   if (!labels.length) {
     return (
-      <div className="mt-3 border-t border-white/10 pt-2">
+      <div className="mt-3 border border-white/10 rounded-xl px-3 py-2">
         <p className="text-[11px] text-white/60">
           Not enough data yet to display trends.
         </p>
@@ -319,10 +323,7 @@ function FxTrendChart() {
       };
     });
 
-  const data = {
-    labels,
-    datasets,
-  };
+  const data = { labels, datasets };
 
   const options: any = {
     responsive: true,
@@ -333,7 +334,7 @@ function FxTrendChart() {
           color: "rgba(255,255,255,0.7)",
           maxRotation: 0,
           autoSkip: true,
-          maxTicksLimit: 6,
+          maxTicksLimit: 5,
         },
         grid: {
           color: "rgba(255,255,255,0.08)",
@@ -353,9 +354,7 @@ function FxTrendChart() {
         display: true,
         labels: {
           color: "rgba(255,255,255,0.8)",
-          font: {
-            size: 10,
-          },
+          font: { size: 10 },
         },
       },
       tooltip: {
@@ -383,9 +382,11 @@ function FxTrendChart() {
   };
 
   return (
-    <div className="mt-3 border-t border-white/10 pt-2 flex flex-col gap-2">
-      {/* Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="mt-4 border border-white/10 rounded-xl bg-black/40 px-3 py-3 flex flex-col gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold text-white/80 uppercase tracking-wide">
+          Market snapshot
+        </p>
         <div className="flex flex-wrap items-center gap-1">
           {CURRENCY_OPTIONS.map((cur) => {
             const isSelected = selectedCurrency === cur;
@@ -408,25 +409,27 @@ function FxTrendChart() {
             );
           })}
         </div>
-        <div className="flex items-center gap-1">
-          {RANGE_OPTIONS.map((opt) => (
-            <button
-              key={opt.key}
-              type="button"
-              onClick={() => setRange(opt.key)}
-              className={`px-2 py-0.5 rounded-full text-[10px] border ${
-                range === opt.key
-                  ? "bg-white text-black border-white"
-                  : "bg-black text-white/70 border-white/30 hover:border-white/70"
-              } transition-colors`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
       </div>
 
-      {/* Smart insights */}
+      {/* Range */}
+      <div className="flex items-center justify-end gap-1">
+        {RANGE_OPTIONS.map((opt) => (
+          <button
+            key={opt.key}
+            type="button"
+            onClick={() => setRange(opt.key)}
+            className={`px-2 py-0.5 rounded-full text-[10px] border ${
+              range === opt.key
+                ? "bg-white text-black border-white"
+                : "bg-black text-white/70 border-white/30 hover:border-white/70"
+            } transition-colors`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Insights */}
       {insights ? (
         <>
           <p className="text-[11px] text-white/80">
@@ -434,7 +437,7 @@ function FxTrendChart() {
           </p>
 
           <div className="grid gap-2 sm:grid-cols-3 text-[11px]">
-            <div className="rounded-lg border border-white/15 bg-black/40 px-2 py-1.5">
+            <div className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5">
               <p className="text-white/60 mb-0.5">Range high / low</p>
               <p className="font-mono">
                 {insights.high.toLocaleString("en-US", {
@@ -452,7 +455,7 @@ function FxTrendChart() {
               </p>
             </div>
 
-            <div className="rounded-lg border border-white/15 bg-black/40 px-2 py-1.5">
+            <div className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5">
               <p className="text-white/60 mb-0.5">Trend</p>
               <p className="font-mono capitalize">{insights.trendLabel}</p>
               <p className="text-[10px] text-white/50">
@@ -460,7 +463,7 @@ function FxTrendChart() {
               </p>
             </div>
 
-            <div className="rounded-lg border border-white/15 bg-black/40 px-2 py-1.5">
+            <div className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5">
               <p className="text-white/60 mb-0.5">Volatility</p>
               <p className="font-mono">
                 {insights.volatilityPct.toFixed(2)}% avg daily move
@@ -478,7 +481,7 @@ function FxTrendChart() {
       )}
 
       {/* Chart */}
-      <div className="h-36 sm:h-40 md:h-44">
+      <div className="h-40 sm:h-44 md:h-48">
         <Line data={data} options={options} />
       </div>
     </div>
@@ -595,9 +598,7 @@ export default function AdminPage() {
 
       const res = await fetch("/api/admin/manual-rate", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           asOfDate,
           quoteCurrency,
@@ -663,9 +664,7 @@ export default function AdminPage() {
     try {
       const res = await fetch("/api/admin/delete-rate", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id }),
       });
 
@@ -696,7 +695,7 @@ export default function AdminPage() {
 
   return (
     <main className="min-h-screen bg-black text-white flex items-center justify-center px-4 py-4">
-      <div className="w-full max-w-5xl border border-white/10 rounded-2xl p-5 sm:p-6 shadow-xl bg-white/5 max-h-[82vh] flex flex-col overflow-hidden">
+      <div className="w-full max-w-5xl border border-white/10 rounded-2xl p-5 sm:p-6 shadow-xl bg-white/5 max-h-[90vh] flex flex-col overflow-hidden">
         <header className="mb-4">
           <h1 className="text-2xl sm:text-3xl font-semibold text-center">
             Savvy Rilla FX – Admin
@@ -706,9 +705,9 @@ export default function AdminPage() {
           </p>
         </header>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)] flex-1 min-h-0">
-          {/* LEFT – FORM */}
-          <section className="flex flex-col">
+        <div className="grid gap-6 lg:grid-cols-2 flex-1 min-h-0">
+          {/* LEFT – FORM + CHART */}
+          <section className="flex flex-col overflow-hidden">
             <form onSubmit={handleSubmit} className="space-y-4">
               {editMode && editingLabel && (
                 <div className="rounded-lg border border-amber-400/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-100 flex items-center justify-between gap-2">
@@ -831,13 +830,17 @@ export default function AdminPage() {
               </button>
             </form>
 
-            <p className="mt-3 text-[11px] text-center text-white/50">
-              For now this is a simple manual entry console. Later we can add
-              tables, charts, and audit trails.
+            {/* Small caption */}
+            <p className="mt-2 text-[11px] text-center text-white/50">
+              Below is a live snapshot of SSP vs key currencies based on the
+              latest entries.
             </p>
+
+            {/* Chart + insights directly under the form */}
+            <FxTrendChart />
           </section>
 
-          {/* RIGHT – TABLE + CHART, with internal scroll */}
+          {/* RIGHT – RECENT RATES TABLE (scrolls internally) */}
           <section className="border border-white/10 rounded-xl p-4 sm:p-4 bg-black/40 flex flex-col h-full">
             <div className="flex items-center justify-between mb-2 gap-3">
               <h2 className="text-sm font-semibold tracking-wide uppercase text-white/80">
@@ -852,7 +855,6 @@ export default function AdminPage() {
               </button>
             </div>
 
-            {/* Scrollable table area */}
             <div className="flex-1 min-h-0 overflow-y-auto pr-1">
               {ratesState === "loading" && (
                 <p className="text-xs text-white/60">
@@ -977,9 +979,6 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
-
-            {/* Chart + smart insights pinned at bottom of panel */}
-            <FxTrendChart />
           </section>
         </div>
       </div>
