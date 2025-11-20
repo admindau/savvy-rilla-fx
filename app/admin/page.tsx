@@ -81,7 +81,7 @@ function FxTrendChart() {
     setSelectedCurrency(cur);
     setActiveCurrencies((prev) => {
       if (prev.includes(cur)) {
-        if (prev.length === 1) return prev; // never zero active series
+        if (prev.length === 1) return prev; // keep at least one
         return prev.filter((c) => c !== cur);
       }
       return [...prev, cur];
@@ -851,7 +851,8 @@ export default function AdminPage() {
               </button>
             </div>
 
-            <div className="mt-2 max-h-[28rem] overflow-y-auto pr-1">
+            {/* 🔥 This is the only change: make the list fill the column height */}
+            <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1">
               {ratesState === "loading" && (
                 <p className="text-xs text-white/60">
                   Loading recent rates…
