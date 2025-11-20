@@ -173,12 +173,11 @@ export default async function HomePage() {
     history30,
     history90,
     history365,
+    historyAll,
     recentRates,
   ] = await Promise.all([
     fetchJson<LatestRatesResponse>("/api/v1/rates/latest?base=SSP"),
-    fetchJson<MarketSummary>(
-      "/api/v1/summary/market?base=SSP&quote=USD"
-    ),
+    fetchJson<MarketSummary>("/api/v1/summary/market?base=SSP&quote=USD"),
     fetchJson<HistoryResponse>(
       "/api/v1/rates/history?base=SSP&quote=USD&days=30"
     ),
@@ -188,6 +187,8 @@ export default async function HomePage() {
     fetchJson<HistoryResponse>(
       "/api/v1/rates/history?base=SSP&quote=USD&days=365"
     ),
+    // "All" history – backend can treat missing `days` as full history.
+    fetchJson<HistoryResponse>("/api/v1/rates/history?base=SSP&quote=USD"),
     fetchJson<RecentRatesResponse>("/api/v1/rates/recent?base=SSP&limit=10"),
   ]);
 
@@ -215,6 +216,12 @@ export default async function HomePage() {
 
   const fxInsights = usdSummary ? buildInsightsFromSummary(usdSummary) : [];
 
+  // If "all" history is missing or super short, fall back to 365d series
+  const allHistoryPoints =
+    historyAll?.points && historyAll.points.length > 1
+      ? historyAll.points
+      : history365?.points ?? [];
+
   const historySeries = [
     {
       label: "30d",
@@ -230,6 +237,11 @@ export default async function HomePage() {
       label: "365d",
       days: 365,
       points: history365?.points ?? [],
+    },
+    {
+      label: "All",
+      days: historyAll?.meta?.count ?? history365?.meta?.count ?? 0,
+      points: allHistoryPoints,
     },
   ].filter((s) => s.points.length > 1);
 
