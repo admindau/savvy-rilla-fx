@@ -479,10 +479,50 @@ export default async function HomePage() {
         </section>
 
         {/* Footer */}
-        <footer className="mt-4 border-t border-zinc-900 pt-4 text-[0.7rem] text-zinc-500 flex flex-wrap items-center justify-between gap-2">
-          <span>Savvy Rilla FX API v1 · Public read-only interface</span>
-          <span>Built by Savvy Gorilla Technologies™</span>
-        </footer>
+        <footer className="mt-4 border-t border-zinc-900 pt-4 text-[0.7rem] text-zinc-500">
+  <div className="flex flex-wrap items-center justify-between gap-4">
+
+    {/* Left side */}
+    <div className="flex items-center gap-2">
+      <div className="relative h-4 w-4 opacity-60">
+        <Image
+          src="/savvy-gorilla-logo-white.png"
+          alt="Savvy Gorilla Technologies"
+          fill
+          className="object-contain"
+        />
+      </div>
+      <span className="text-zinc-400">
+        Savvy Rilla FX API v1 · Public read-only interface
+      </span>
+    </div>
+
+    {/* Right side */}
+    <div className="flex flex-wrap items-center gap-3 text-zinc-500">
+      <span className="text-zinc-400">
+        Built by <span className="text-zinc-200">Savvy Gorilla Technologies™</span>
+      </span>
+
+      <span className="hidden sm:inline text-zinc-600">•</span>
+
+      <span className="text-zinc-400">
+        Made in Juba <span className="ml-0.5">🇸🇸</span>
+      </span>
+
+      <span className="hidden sm:inline text-zinc-600">•</span>
+
+      <a
+        href="https://savvyrilla.tech"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-zinc-300 hover:text-white transition"
+      >
+        savvyrilla.tech
+      </a>
+    </div>
+
+  </div>
+</footer>
       </div>
     </main>
   );
