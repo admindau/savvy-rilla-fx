@@ -1,5 +1,36 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title:
+    "Savvy Rilla FX API – Real-time FX infrastructure for SSP & key global currencies",
+  description:
+    "Public, read-only FX API for South Sudanese Pound (SSP) markets. Stream official rates, power dashboards, and integrate FX data into your applications with a clean, versioned API.",
+  openGraph: {
+    title: "Savvy Rilla FX API – Real-time FX infrastructure for SSP",
+    description:
+      "Focused FX backend for South Sudanese Pound (SSP) markets. Built by Savvy Gorilla Technologies™.",
+    url: "https://fx.savvyrilla.tech",
+    siteName: "Savvy Rilla FX API",
+    type: "website",
+    images: [
+      {
+        url: "https://fx.savvyrilla.tech/og-fx-api.png",
+        width: 1200,
+        height: 630,
+        alt: "Savvy Rilla FX API – Market snapshot for SSP & key currencies",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Savvy Rilla FX API – Real-time FX for SSP",
+    description:
+      "Public read-only FX API for SSP & key global currencies. Powered by Savvy Gorilla Technologies™.",
+    images: ["https://fx.savvyrilla.tech/og-fx-api.png"],
+  },
+};
 
 export const dynamic = "force-dynamic";
 
@@ -57,17 +88,12 @@ type RecentRatesResponse = {
 };
 
 function getApiBaseUrl() {
-  // If you ever want to override explicitly:
   if (process.env.NEXT_PUBLIC_FX_API_ORIGIN) {
     return process.env.NEXT_PUBLIC_FX_API_ORIGIN;
   }
-
-  // On Vercel, this is like "fx-savrilla-tech.vercel.app"
   if (process.env.VERCEL_URL) {
     return `https://${process.env.VERCEL_URL}`;
   }
-
-  // Local dev / fallback
   return "http://localhost:3000";
 }
 
@@ -328,9 +354,7 @@ export default async function HomePage() {
             </div>
             <div className="text-xs text-zinc-500">
               Latest fixing date:{" "}
-              <span className="font-medium text-zinc-200">
-                {latestDate}
-              </span>
+              <span className="font-medium text-zinc-200">{latestDate}</span>
             </div>
           </div>
 
@@ -414,9 +438,7 @@ export default async function HomePage() {
                         className="grid grid-cols-[1.1fr_0.8fr_0.7fr] border-t border-zinc-900/80 px-3 py-2"
                       >
                         <div>
-                          <p className="text-zinc-100">
-                            {row.as_of_date}
-                          </p>
+                          <p className="text-zinc-100">{row.as_of_date}</p>
                           <p className="text-[0.7rem] text-zinc-500">
                             {row.base_currency}/{row.quote_currency}
                           </p>
