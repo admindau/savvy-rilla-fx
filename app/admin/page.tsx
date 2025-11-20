@@ -67,8 +67,7 @@ const CURRENCY_COLORS: Record<string, string> = {
 };
 
 /**
- * FX TREND CHART + SMART INSIGHTS
- * Lives on the LEFT under the Save FX rate button.
+ * LEFT-COLUMN Smart Insights + Multi-series Chart
  */
 function FxTrendChart() {
   const [selectedCurrency, setSelectedCurrency] = useState<string>("USD");
@@ -82,7 +81,7 @@ function FxTrendChart() {
     setSelectedCurrency(cur);
     setActiveCurrencies((prev) => {
       if (prev.includes(cur)) {
-        if (prev.length === 1) return prev; // never allow zero
+        if (prev.length === 1) return prev; // never zero active series
         return prev.filter((c) => c !== cur);
       }
       return [...prev, cur];
@@ -160,18 +159,14 @@ function FxTrendChart() {
     const pts = series[cur];
     if (pts && pts.length) {
       const filtered = applyRangeFilter(pts);
-      if (filtered.length) {
-        filteredSeries[cur] = filtered;
-      }
+      if (filtered.length) filteredSeries[cur] = filtered;
     }
   });
 
   const dateSet = new Set<string>();
   activeCurrencies.forEach((cur) => {
     const pts = filteredSeries[cur];
-    if (pts) {
-      pts.forEach((p) => dateSet.add(p.date));
-    }
+    if (pts) pts.forEach((p) => dateSet.add(p.date));
   });
 
   const labels = Array.from(dateSet).sort();
@@ -379,7 +374,7 @@ function FxTrendChart() {
   };
 
   return (
-    <div className="mt-4 border border-white/10 rounded-xl bg-black/40 px-3 py-3 flex flex-col gap-2">
+    <div className="mt-3 border border-white/10 rounded-xl bg-black/40 px-3 py-3 flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-semibold text-white/80 uppercase tracking-wide">
           Market snapshot
@@ -408,7 +403,6 @@ function FxTrendChart() {
         </div>
       </div>
 
-      {/* Range */}
       <div className="flex items-center justify-end gap-1">
         {RANGE_OPTIONS.map((opt) => (
           <button
@@ -426,7 +420,6 @@ function FxTrendChart() {
         ))}
       </div>
 
-      {/* Insights */}
       {insights ? (
         <>
           <p className="text-[11px] text-white/80">
@@ -478,7 +471,7 @@ function FxTrendChart() {
       )}
 
       {/* Chart */}
-      <div className="h-40 sm:h-44 md:h-48">
+      <div className="h-36 sm:h-40 md:h-44">
         <Line data={data} options={options} />
       </div>
     </div>
@@ -691,8 +684,8 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="min-h-screen bg-black text-white flex items-center justify-center px-4 py-4">
-      <div className="w-full max-w-5xl border border-white/10 rounded-2xl p-5 sm:p-6 shadow-xl bg-white/5 max-h-[90vh] flex flex-col overflow-hidden">
+    <main className="min-h-screen bg-black text-white px-4 py-6 flex justify-center">
+      <div className="w-full max-w-5xl border border-white/10 rounded-2xl p-5 sm:p-6 shadow-xl bg-white/5 flex flex-col">
         <header className="mb-4">
           <h1 className="text-2xl sm:text-3xl font-semibold text-center">
             Savvy Rilla FX – Admin
@@ -702,9 +695,9 @@ export default function AdminPage() {
           </p>
         </header>
 
-        <div className="grid gap-6 lg:grid-cols-2 flex-1 min-h-0">
-          {/* LEFT – FORM + CHART */}
-          <section className="flex flex-col overflow-hidden">
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* LEFT COLUMN */}
+          <section className="flex flex-col">
             <form onSubmit={handleSubmit} className="space-y-4">
               {editMode && editingLabel && (
                 <div className="rounded-lg border border-amber-400/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-100 flex items-center justify-between gap-2">
@@ -722,6 +715,7 @@ export default function AdminPage() {
                 </div>
               )}
 
+              {/* As-of date */}
               <div className="space-y-1">
                 <label className="block text-sm font-medium">As of date</label>
                 <input
@@ -736,6 +730,7 @@ export default function AdminPage() {
                 </p>
               </div>
 
+              {/* Currency */}
               <div className="space-y-1">
                 <label className="block text-sm font-medium">
                   Quote currency
@@ -759,6 +754,7 @@ export default function AdminPage() {
                 </p>
               </div>
 
+              {/* Mid rate */}
               <div className="space-y-1">
                 <label className="block text-sm font-medium">Mid rate</label>
                 <input
@@ -775,6 +771,7 @@ export default function AdminPage() {
                 </p>
               </div>
 
+              {/* Mark as official */}
               <div className="flex items-center justify-between gap-3 border border-white/10 rounded-xl px-3 py-2">
                 <div>
                   <p className="text-sm font-medium">
@@ -800,6 +797,7 @@ export default function AdminPage() {
                 </button>
               </div>
 
+              {/* Status message */}
               {message && (
                 <div
                   className={`text-sm rounded-lg px-3 py-2 ${
@@ -812,6 +810,7 @@ export default function AdminPage() {
                 </div>
               )}
 
+              {/* Save button */}
               <button
                 type="submit"
                 disabled={saveState === "saving"}
@@ -827,18 +826,18 @@ export default function AdminPage() {
               </button>
             </form>
 
-            {/* Small caption */}
+            {/* Caption */}
             <p className="mt-2 text-[11px] text-center text-white/50">
               Below is a live snapshot of SSP vs key currencies based on the
               latest entries.
             </p>
 
-            {/* Chart + insights directly under the form */}
+            {/* Smart Insights + Chart */}
             <FxTrendChart />
           </section>
 
-          {/* RIGHT – RECENT RATES TABLE (scrolls internally) */}
-          <section className="border border-white/10 rounded-xl p-4 sm:p-4 bg-black/40 flex flex-col h-full">
+          {/* RIGHT COLUMN – scrollable recent list */}
+          <section className="border border-white/10 rounded-xl p-4 sm:p-4 bg-black/40 flex flex-col">
             <div className="flex items-center justify-between mb-2 gap-3">
               <h2 className="text-sm font-semibold tracking-wide uppercase text-white/80">
                 Recent FX rates
@@ -852,8 +851,7 @@ export default function AdminPage() {
               </button>
             </div>
 
-            {/* changed wrapper here */}
-            <div className="mt-2 max-h-[380px] overflow-y-auto pr-1">
+            <div className="mt-2 max-h-[28rem] overflow-y-auto pr-1">
               {ratesState === "loading" && (
                 <p className="text-xs text-white/60">
                   Loading recent rates…
