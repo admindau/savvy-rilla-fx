@@ -102,6 +102,70 @@ async function fetchJson<T>(path: string): Promise<T | null> {
   }
 }
 
+/**
+ * Simple rule-based “AI-style” commentary for USD/SSP,
+ * built from the summary + 30d range.
+ */
+function buildUsdSspCommentary(
+  summary: MarketSummary,
+  opts: { min30: number | null; max30: number | null }
+): string {
+  const { min30, max30 } = opts;
+  const date = summary.as_of_date ?? "today";
+  const mid = summary.mid_rate;
+  const change = summary.change_pct_vs_previous ?? null;
+  const trendLabel = summary.trend?.label ?? "Range-Bound";
+
+  if (mid == null) {
+    return `USD/SSP summary data is not available for ${date}.`;
+  }
+
+  const midStr = mid.toLocaleString("en-US", {
+    maximumFractionDigits: 4,
+  });
+
+  let sentence1: string;
+
+  if (change == null || Number.isNaN(change)) {
+    sentence1 = `On ${date}, USD/SSP fixed at ${midStr}.`;
+  } else {
+    const changeAbs = Math.abs(change);
+    const changeStr = `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`;
+
+    if (changeAbs < 0.05) {
+      sentence1 = `On ${date}, USD/SSP was broadly unchanged, fixing at ${midStr} (${changeStr} vs the previous fixing).`;
+    } else if (changeAbs < 0.3) {
+      sentence1 =
+        change > 0
+          ? `On ${date}, USD/SSP edged higher to ${midStr} (${changeStr} vs the previous fixing).`
+          : `On ${date}, USD/SSP eased lower to ${midStr} (${changeStr} vs the previous fixing).`;
+    } else {
+      sentence1 =
+        change > 0
+          ? `On ${date}, USD/SSP moved notably higher to ${midStr} (${changeStr} vs the previous fixing).`
+          : `On ${date}, USD/SSP weakened noticeably to ${midStr} (${changeStr} vs the previous fixing).`;
+    }
+  }
+
+  let sentence2 = "";
+  if (min30 != null && max30 != null) {
+    const minStr = min30.toLocaleString("en-US", {
+      maximumFractionDigits: 2,
+    });
+    const maxStr = max30.toLocaleString("en-US", {
+      maximumFractionDigits: 2,
+    });
+    sentence2 = ` Over the last 30 days, the pair has traded between ${minStr} and ${maxStr}.`;
+  }
+
+  let sentence3 = "";
+  if (trendLabel) {
+    sentence3 = ` Current trend signal is “${trendLabel}”, pointing to a ${trendLabel.toLowerCase()} market regime.`;
+  }
+
+  return `${sentence1}${sentence2}${sentence3}`.trim();
+}
+
 export default async function HomePage() {
   const [
     latestRates,
@@ -168,6 +232,14 @@ export default async function HomePage() {
       points: history365?.points ?? [],
     },
   ].filter((s) => s.points.length > 1);
+
+  const usdCommentary =
+    usdSummary != null
+      ? buildUsdSspCommentary(usdSummary, {
+          min30: usdMin30,
+          max30: usdMax30,
+        })
+      : null;
 
   return (
     <main className="min-h-screen bg-black text-zinc-100">
@@ -355,6 +427,18 @@ export default async function HomePage() {
 
             {usdSummary && (
               <>
+                {/* Daily FX commentary */}
+                {usdCommentary && (
+                  <div className="mt-3 border-t border-zinc-800 pt-3 text-xs">
+                    <p className="mb-1 text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
+                      Daily FX commentary (beta)
+                    </p>
+                    <p className="text-[0.8rem] text-zinc-300 leading-relaxed">
+                      {usdCommentary}
+                    </p>
+                  </div>
+                )}
+
                 {/* Smart FX insights */}
                 <div className="mt-3 border-t border-zinc-800 pt-3 text-xs">
                   <p className="mb-2 text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
