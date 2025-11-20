@@ -354,26 +354,50 @@ export default async function HomePage() {
             </p>
 
             {usdSummary && (
-              <div className="mt-3 border-t border-zinc-800 pt-3 text-xs">
-                <p className="mb-2 text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
-                  Smart FX insights
-                </p>
-
-                {fxInsights.length === 0 ? (
-                  <p className="text-zinc-500 text-[0.75rem]">
-                    No insights available yet for this pair.
+              <>
+                {/* Smart FX insights */}
+                <div className="mt-3 border-t border-zinc-800 pt-3 text-xs">
+                  <p className="mb-2 text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
+                    Smart FX insights
                   </p>
-                ) : (
-                  <ul className="space-y-1.5 text-[0.8rem] text-zinc-300">
-                    {fxInsights.map((insight, idx) => (
-                      <li key={idx} className="flex gap-2">
-                        <span className="mt-[6px] h-1 w-1 rounded-full bg-zinc-500" />
-                        <span>{insight}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+
+                  {fxInsights.length === 0 ? (
+                    <p className="text-zinc-500 text-[0.75rem]">
+                      No insights available yet for this pair.
+                    </p>
+                  ) : (
+                    <ul className="space-y-1.5 text-[0.8rem] text-zinc-300">
+                      {fxInsights.map((insight, idx) => (
+                        <li key={idx} className="flex gap-2">
+                          <span className="mt-[6px] h-1 w-1 rounded-full bg-zinc-500" />
+                          <span>{insight}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                {/* Embed widget snippet */}
+                <div className="mt-3 border-t border-zinc-800 pt-3 text-[0.7rem] text-zinc-500 space-y-2">
+                  <p className="text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
+                    Embed this snapshot
+                  </p>
+                  <p className="text-[0.7rem] text-zinc-400">
+                    Paste this snippet into any website to embed a live USD/SSP
+                    widget.
+                  </p>
+                  <pre className="rounded-lg bg-zinc-950 border border-zinc-900 p-2 text-[0.65rem] overflow-x-auto text-zinc-300">
+{`<iframe
+  src="https://fx.savvyrilla.tech/widget/usd-ssp"
+  width="360"
+  height="240"
+  style="border:0; background:#000; color:#fff;"
+  loading="lazy"
+  referrerpolicy="no-referrer-when-downgrade"
+></iframe>`}
+                  </pre>
+                </div>
+              </>
             )}
           </div>
         </section>
