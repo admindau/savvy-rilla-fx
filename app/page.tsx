@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import {
+  buildInsightsFromSummary,
+  type MarketSummary,
+} from "@/lib/fx/insights";
 
 export const metadata: Metadata = {
   title:
@@ -39,27 +43,6 @@ type LatestRatesResponse = {
   as_of_date: string;
   source?: string;
   rates: Record<string, number>;
-};
-
-type MarketSummaryResponse = {
-  base: string;
-  quote: string;
-  as_of_date: string;
-  mid_rate: number;
-  change_pct_vs_previous: number | null;
-  range: {
-    window_days: number;
-    high: number;
-    low: number;
-  };
-  trend: {
-    window_days: number;
-    label: string;
-  };
-  volatility: {
-    window_days: number;
-    avg_daily_move_pct: number | null;
-  };
 };
 
 type HistoryResponse = {
@@ -122,7 +105,7 @@ export default async function HomePage() {
   const [latestRates, usdSummary, usdHistory, recentRates] =
     await Promise.all([
       fetchJson<LatestRatesResponse>("/api/v1/rates/latest?base=SSP"),
-      fetchJson<MarketSummaryResponse>(
+      fetchJson<MarketSummary>(
         "/api/v1/summary/market?base=SSP&quote=USD"
       ),
       fetchJson<HistoryResponse>(
@@ -152,6 +135,8 @@ export default async function HomePage() {
           a.localeCompare(b)
         )
       : [];
+
+  const fxInsights = usdSummary ? buildInsightsFromSummary(usdSummary) : [];
 
   return (
     <main className="min-h-screen bg-black text-zinc-100">
@@ -333,12 +318,35 @@ export default async function HomePage() {
               </code>
               .
             </p>
+
+            {usdSummary && (
+              <div className="mt-3 border-t border-zinc-800 pt-3 text-xs">
+                <p className="mb-2 text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
+                  Smart FX insights
+                </p>
+
+                {fxInsights.length === 0 ? (
+                  <p className="text-zinc-500 text-[0.75rem]">
+                    No insights available yet for this pair.
+                  </p>
+                ) : (
+                  <ul className="space-y-1.5 text-[0.8rem] text-zinc-300">
+                    {fxInsights.map((insight, idx) => (
+                      <li key={idx} className="flex gap-2">
+                        <span className="mt-[6px] h-1 w-1 rounded-full bg-zinc-500" />
+                        <span>{insight}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
         </section>
 
         {/* FX Dashboard */}
         <section id="fx-dashboard" className="space-y-6">
-          <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="flex flex-wrap items-end justify_between gap-3">
             <div>
               <p className="text-[0.7rem] uppercase tracking-[0.25em] text-zinc-500">
                 FX dashboard
@@ -480,49 +488,50 @@ export default async function HomePage() {
 
         {/* Footer */}
         <footer className="mt-4 border-t border-zinc-900 pt-4 text-[0.7rem] text-zinc-500">
-  <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            {/* Left side */}
+            <div className="flex items-center gap-2">
+              <div className="relative h-4 w-4 opacity-60">
+                <Image
+                  src="/savvy-gorilla-logo-white.png"
+                  alt="Savvy Gorilla Technologies"
+                  fill
+                  className="object-contain"
+                />
+              </div>
+              <span className="text-zinc-400">
+                Savvy Rilla FX API v1 · Public read-only interface
+              </span>
+            </div>
 
-    {/* Left side */}
-    <div className="flex items-center gap-2">
-      <div className="relative h-4 w-4 opacity-60">
-        <Image
-          src="/savvy-gorilla-logo-white.png"
-          alt="Savvy Gorilla Technologies"
-          fill
-          className="object-contain"
-        />
-      </div>
-      <span className="text-zinc-400">
-        Savvy Rilla FX API v1 · Public read-only interface
-      </span>
-    </div>
+            {/* Right side */}
+            <div className="flex flex-wrap items-center gap-3 text-zinc-500">
+              <span className="text-zinc-400">
+                Built by{" "}
+                <span className="text-zinc-200">
+                  Savvy Gorilla Technologies™
+                </span>
+              </span>
 
-    {/* Right side */}
-    <div className="flex flex-wrap items-center gap-3 text-zinc-500">
-      <span className="text-zinc-400">
-        Built by <span className="text-zinc-200">Savvy Gorilla Technologies™</span>
-      </span>
+              <span className="hidden sm:inline text-zinc-600">•</span>
 
-      <span className="hidden sm:inline text-zinc-600">•</span>
+              <span className="text-zinc-400">
+                Made in Juba <span className="ml-0.5">🇸🇸</span>
+              </span>
 
-      <span className="text-zinc-400">
-        Made in Juba <span className="ml-0.5">🇸🇸</span>
-      </span>
+              <span className="hidden sm:inline text-zinc-600">•</span>
 
-      <span className="hidden sm:inline text-zinc-600">•</span>
-
-      <a
-        href="https://savvyrilla.tech"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-zinc-300 hover:text-white transition"
-      >
-        savvyrilla.tech
-      </a>
-    </div>
-
-  </div>
-</footer>
+              <a
+                href="https://savvyrilla.tech"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-zinc-300 hover:text-white transition"
+              >
+                savvyrilla.tech
+              </a>
+            </div>
+          </div>
+        </footer>
       </div>
     </main>
   );
