@@ -102,9 +102,7 @@ function FxTrendChart() {
         for (const cur of CURRENCY_OPTIONS) {
           try {
             const res = await fetch(
-              `/api/admin/chart-data?quote=${encodeURIComponent(
-                cur
-              )}&limit=365`
+              `/api/admin/chart-data?quote=${encodeURIComponent(cur)}&limit=365`
             );
             const json = await res.json();
 
@@ -118,7 +116,10 @@ function FxTrendChart() {
               nextSeries[cur] = json.points ?? [];
             }
           } catch (err: any) {
-            console.error(`Unexpected error loading FX chart data for ${cur}:`, err);
+            console.error(
+              `Unexpected error loading FX chart data for ${cur}:`,
+              err
+            );
             nextSeries[cur] = [];
           }
         }
@@ -187,11 +188,7 @@ function FxTrendChart() {
     const diff = latest.rateMid - prev.rateMid;
     const pct = (diff / prev.rateMid) * 100;
     const direction =
-      Math.abs(diff) < 0.0001
-        ? "unchanged"
-        : diff > 0
-        ? "higher"
-        : "lower";
+      Math.abs(diff) < 0.0001 ? "unchanged" : diff > 0 ? "higher" : "lower";
     const signWord = diff > 0 ? "up" : diff < 0 ? "down" : "unchanged";
 
     let primarySummary: string;
@@ -855,7 +852,8 @@ export default function AdminPage() {
               </button>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+            {/* changed wrapper here */}
+            <div className="mt-2 max-h-[380px] overflow-y-auto pr-1">
               {ratesState === "loading" && (
                 <p className="text-xs text-white/60">
                   Loading recent rates…
