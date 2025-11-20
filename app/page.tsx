@@ -481,7 +481,7 @@ export default async function HomePage() {
         {/* Footer */}
         <footer className="mt-4 border-t border-zinc-900 pt-4 text-[0.7rem] text-zinc-500 flex flex-wrap items-center justify-between gap-2">
           <span>Savvy Rilla FX API v1 · Public read-only interface</span>
-          <span>Built on Next.js 16 · Supabase · Vercel</span>
+          <span>Built by Savvy Gorilla Technologies™</span>
         </footer>
       </div>
     </main>
