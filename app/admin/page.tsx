@@ -1,4 +1,3 @@
-// app/admin/page.tsx
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
@@ -14,7 +13,6 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 
-// Register Chart.js parts
 ChartJS.register(
   LineElement,
   PointElement,
@@ -59,10 +57,8 @@ const RANGE_DAYS: Record<RangeKey, number | null> = {
   all: null,
 };
 
-// Currencies we support in overlay
 const CURRENCY_OPTIONS = ["USD", "EUR", "KES", "GBP"];
 
-// Simple color palette (still monochrome-friendly)
 const CURRENCY_COLORS: Record<string, string> = {
   USD: "#ffffff",
   EUR: "#cccccc",
@@ -78,12 +74,10 @@ function FxTrendChart() {
   const [error, setError] = useState<string | null>(null);
   const [series, setSeries] = useState<Record<string, FxChartPoint[]>>({});
 
-  // Helper to toggle currencies for overlay
   function toggleCurrency(cur: string) {
     setSelectedCurrency(cur);
     setActiveCurrencies((prev) => {
       if (prev.includes(cur)) {
-        // Don't allow turning off the last active currency
         if (prev.length === 1) return prev;
         return prev.filter((c) => c !== cur);
       }
@@ -91,7 +85,6 @@ function FxTrendChart() {
     });
   }
 
-  // Load all currencies once (overlay capable)
   useEffect(() => {
     let cancelled = false;
 
@@ -148,7 +141,6 @@ function FxTrendChart() {
     };
   }, []);
 
-  // Apply range filter per-currency
   function applyRangeFilter(points: FxChartPoint[]): FxChartPoint[] {
     if (!points.length) return [];
     const days = RANGE_DAYS[range];
@@ -158,7 +150,6 @@ function FxTrendChart() {
     return points.slice(points.length - days);
   }
 
-  // Filtered series for all currencies
   const filteredSeries: Record<string, FxChartPoint[]> = {};
   CURRENCY_OPTIONS.forEach((cur) => {
     const pts = series[cur];
@@ -170,7 +161,6 @@ function FxTrendChart() {
     }
   });
 
-  // Build union of dates across active currencies for the x-axis
   const dateSet = new Set<string>();
   activeCurrencies.forEach((cur) => {
     const pts = filteredSeries[cur];
@@ -179,9 +169,8 @@ function FxTrendChart() {
     }
   });
 
-  const labels = Array.from(dateSet).sort(); // YYYY-MM-DD so lexicographic is fine
+  const labels = Array.from(dateSet).sort();
 
-  // Expanded Smart Insights (for selectedCurrency only)
   const insights = (() => {
     const pts = filteredSeries[selectedCurrency];
     if (!pts || pts.length < 2) return null;
@@ -191,7 +180,6 @@ function FxTrendChart() {
 
     if (!latest || !prev || prev.rateMid === 0) return null;
 
-    // Primary summary: latest vs previous
     const diff = latest.rateMid - prev.rateMid;
     const pct = (diff / prev.rateMid) * 100;
     const direction =
@@ -217,7 +205,6 @@ function FxTrendChart() {
       )}% compared to the previous fixing.`;
     }
 
-    // High / low over the range
     let high = pts[0].rateMid;
     let low = pts[0].rateMid;
     let highDate = pts[0].date;
@@ -235,7 +222,6 @@ function FxTrendChart() {
       }
     }
 
-    // Up / down day counts + volatility
     let daysUp = 0;
     let daysDown = 0;
     const pctMoves: number[] = [];
@@ -259,7 +245,6 @@ function FxTrendChart() {
         ? pctMoves.reduce((sum, v) => sum + v, 0) / pctMoves.length
         : 0;
 
-    // Overall trend vs first point
     const first = pts[0];
     let trendLabel = "range-bound";
     if (first && first.rateMid !== 0) {
@@ -284,7 +269,7 @@ function FxTrendChart() {
 
   if (loading) {
     return (
-      <div className="mt-4 border-t border-white/10 pt-3">
+      <div className="mt-3 border-t border-white/10 pt-2">
         <p className="text-[11px] text-white/60">Loading FX trends…</p>
       </div>
     );
@@ -292,7 +277,7 @@ function FxTrendChart() {
 
   if (error) {
     return (
-      <div className="mt-4 border-t border-white/10 pt-3">
+      <div className="mt-3 border-t border-white/10 pt-2">
         <p className="text-[11px] text-red-300">
           {error || "Failed to load FX chart data."}
         </p>
@@ -302,7 +287,7 @@ function FxTrendChart() {
 
   if (!labels.length) {
     return (
-      <div className="mt-4 border-t border-white/10 pt-3">
+      <div className="mt-3 border-t border-white/10 pt-2">
         <p className="text-[11px] text-white/60">
           Not enough data yet to display trends.
         </p>
@@ -310,7 +295,6 @@ function FxTrendChart() {
     );
   }
 
-  // Build datasets for each active currency
   const datasets = activeCurrencies
     .filter((cur) => filteredSeries[cur] && filteredSeries[cur].length)
     .map((cur) => {
@@ -399,9 +383,9 @@ function FxTrendChart() {
   };
 
   return (
-    <div className="mt-4 border-t border-white/10 pt-3">
+    <div className="mt-3 border-t border-white/10 pt-2 flex flex-col gap-2">
       {/* Controls */}
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-1">
           {CURRENCY_OPTIONS.map((cur) => {
             const isSelected = selectedCurrency === cur;
@@ -418,11 +402,6 @@ function FxTrendChart() {
                       : "bg-black text-white border-white"
                     : "bg-black text-white/40 border-white/20"
                 }`}
-                title={
-                  isActive
-                    ? `Click to focus on ${cur} (or toggle off overlay)`
-                    : `Click to add ${cur} to overlay`
-                }
               >
                 {cur}
               </button>
@@ -447,14 +426,14 @@ function FxTrendChart() {
         </div>
       </div>
 
-      {/* Smart insights for selected currency */}
+      {/* Smart insights */}
       {insights ? (
         <>
-          <p className="mb-2 text-[11px] text-white/80">
+          <p className="text-[11px] text-white/80">
             {insights.primarySummary}
           </p>
 
-          <div className="mb-2 grid gap-2 sm:grid-cols-3 text-[11px]">
+          <div className="grid gap-2 sm:grid-cols-3 text-[11px]">
             <div className="rounded-lg border border-white/15 bg-black/40 px-2 py-1.5">
               <p className="text-white/60 mb-0.5">Range high / low</p>
               <p className="font-mono">
@@ -493,13 +472,13 @@ function FxTrendChart() {
           </div>
         </>
       ) : (
-        <p className="mb-2 text-[11px] text-white/60">
+        <p className="text-[11px] text-white/60">
           Not enough data for {selectedCurrency} to generate insights yet.
         </p>
       )}
 
       {/* Chart */}
-      <div className="h-40 sm:h-48 md:h-56">
+      <div className="h-36 sm:h-40 md:h-44">
         <Line data={data} options={options} />
       </div>
     </div>
@@ -507,10 +486,8 @@ function FxTrendChart() {
 }
 
 export default function AdminPage() {
-  // Auth gate state
   const [authChecked, setAuthChecked] = useState(false);
 
-  // Form state
   const [asOfDate, setAsOfDate] = useState<string>(() => {
     const d = new Date();
     const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -521,16 +498,13 @@ export default function AdminPage() {
   const [rateMid, setRateMid] = useState<string>("");
   const [isOfficial, setIsOfficial] = useState<boolean>(true);
 
-  // Create/Edit state
   const [editMode, setEditMode] = useState(false);
   const [editingRateId, setEditingRateId] = useState<number | null>(null);
   const [editingLabel, setEditingLabel] = useState<string | null>(null);
 
-  // Status messages
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [message, setMessage] = useState<string | null>(null);
 
-  // Table state
   const [rates, setRates] = useState<FxRate[]>([]);
   const [ratesState, setRatesState] = useState<"idle" | "loading" | "error">(
     "idle"
@@ -562,7 +536,6 @@ export default function AdminPage() {
     }
   }
 
-  // Check admin auth on mount
   useEffect(() => {
     let cancelled = false;
 
@@ -648,7 +621,6 @@ export default function AdminPage() {
           : json?.message || "FX rate saved successfully."
       );
 
-      // After save, stay on current values but exit edit mode
       setEditMode(false);
       setEditingRateId(null);
       setEditingLabel(null);
@@ -704,7 +676,6 @@ export default function AdminPage() {
         return;
       }
 
-      // If we deleted the one we're editing, reset the form
       if (editingRateId === id) {
         resetFormToCreate();
       }
@@ -724,22 +695,21 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="min-h-screen bg-black text-white flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-4xl border border-white/10 rounded-2xl p-6 sm:p-8 shadow-xl bg-white/5">
-        <header className="mb-6">
+    <main className="min-h-screen bg-black text-white flex items-center justify-center px-4 py-4">
+      <div className="w-full max-w-5xl border border-white/10 rounded-2xl p-5 sm:p-6 shadow-xl bg-white/5 max-h-[82vh] flex flex-col overflow-hidden">
+        <header className="mb-4">
           <h1 className="text-2xl sm:text-3xl font-semibold text-center">
             Savvy Rilla FX – Admin
           </h1>
-          <p className="mt-2 text-sm text-center text-white/70">
+          <p className="mt-1 text-sm text-center text-white/70">
             Manual mid-rate entry for SSP vs global currencies.
           </p>
         </header>
 
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)]">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)] flex-1 min-h-0">
           {/* LEFT – FORM */}
-          <section>
-            <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Editing banner */}
+          <section className="flex flex-col">
+            <form onSubmit={handleSubmit} className="space-y-4">
               {editMode && editingLabel && (
                 <div className="rounded-lg border border-amber-400/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-100 flex items-center justify-between gap-2">
                   <span>
@@ -756,8 +726,7 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {/* Date */}
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <label className="block text-sm font-medium">As of date</label>
                 <input
                   type="date"
@@ -771,8 +740,7 @@ export default function AdminPage() {
                 </p>
               </div>
 
-              {/* Quote currency */}
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <label className="block text-sm font-medium">
                   Quote currency
                 </label>
@@ -795,8 +763,7 @@ export default function AdminPage() {
                 </p>
               </div>
 
-              {/* Mid rate */}
-              <div className="space-y-1.5">
+              <div className="space-y-1">
                 <label className="block text-sm font-medium">Mid rate</label>
                 <input
                   type="number"
@@ -812,7 +779,6 @@ export default function AdminPage() {
                 </p>
               </div>
 
-              {/* Official flag */}
               <div className="flex items-center justify-between gap-3 border border-white/10 rounded-xl px-3 py-2">
                 <div>
                   <p className="text-sm font-medium">
@@ -838,7 +804,6 @@ export default function AdminPage() {
                 </button>
               </div>
 
-              {/* Status message */}
               {message && (
                 <div
                   className={`text-sm rounded-lg px-3 py-2 ${
@@ -851,7 +816,6 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {/* Submit button */}
               <button
                 type="submit"
                 disabled={saveState === "saving"}
@@ -867,15 +831,15 @@ export default function AdminPage() {
               </button>
             </form>
 
-            <p className="mt-6 text-[11px] text-center text-white/50">
+            <p className="mt-3 text-[11px] text-center text-white/50">
               For now this is a simple manual entry console. Later we can add
               tables, charts, and audit trails.
             </p>
           </section>
 
-          {/* RIGHT – RECENT RATES TABLE + CHART */}
-          <section className="border border-white/10 rounded-xl p-4 sm:p-5 bg-black/40 flex flex-col">
-            <div className="flex items-center justify-between mb-3 gap-3">
+          {/* RIGHT – TABLE + CHART, with internal scroll */}
+          <section className="border border-white/10 rounded-xl p-4 sm:p-4 bg-black/40 flex flex-col h-full">
+            <div className="flex items-center justify-between mb-2 gap-3">
               <h2 className="text-sm font-semibold tracking-wide uppercase text-white/80">
                 Recent FX rates
               </h2>
@@ -888,130 +852,133 @@ export default function AdminPage() {
               </button>
             </div>
 
-            {ratesState === "loading" && (
-              <p className="text-xs text-white/60">
-                Loading recent rates…
-              </p>
-            )}
-
-            {ratesState === "error" && (
-              <p className="text-xs text-red-300">
-                {ratesError || "Failed to load recent FX rates."}
-              </p>
-            )}
-
-            {ratesState !== "loading" &&
-              rates.length === 0 &&
-              !ratesError && (
+            {/* Scrollable table area */}
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+              {ratesState === "loading" && (
                 <p className="text-xs text-white/60">
-                  No FX rates have been entered yet.
+                  Loading recent rates…
                 </p>
               )}
 
-            {rates.length > 0 && (
-              <div className="mt-1 overflow-x-auto">
-                <table className="min-w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-white/15 text-white/70">
-                      <th className="text-left py-2 pr-3 font-medium">
-                        Date
-                      </th>
-                      <th className="text-left py-2 px-3 font-medium">
-                        Currency
-                      </th>
-                      <th className="text-right py-2 px-3 font-medium">
-                        Mid rate
-                      </th>
-                      <th className="text-center py-2 px-3 font-medium">
-                        Official
-                      </th>
-                      <th className="text-right py-2 px-3 font-medium whitespace-nowrap">
-                        Created at
-                      </th>
-                      <th className="text-right py-2 pl-3 font-medium">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rates.map((rate) => (
-                      <tr
-                        key={
-                          rate.id ??
-                          `${rate.asOfDate}-${rate.quoteCurrency}-${rate.created_at}`
-                        }
-                        className="border-b border-white/10 last:border-0"
-                      >
-                        <td className="py-1.5 pr-3 align-top">
-                          <span className="font-mono text-[11px]">
-                            {rate.asOfDate ?? "-"}
-                          </span>
-                        </td>
-                        <td className="py-1.5 px-3 align-top">
-                          <span className="font-mono text-[11px]">
-                            {rate.quoteCurrency}
-                          </span>
-                        </td>
-                        <td className="py-1.5 px-3 align-top text-right">
-                          <span className="font-mono text-[11px]">
-                            {typeof rate.rateMid === "number"
-                              ? rate.rateMid.toLocaleString("en-US", {
-                                  minimumFractionDigits: 4,
-                                  maximumFractionDigits: 4,
-                                })
-                              : rate.rateMid}
-                          </span>
-                        </td>
-                        <td className="py-1.5 px-3 align-top text-center">
-                          {rate.isOfficial ? (
-                            <span className="inline-flex items-center justify-center rounded-full border border-emerald-400/70 px-2 py-0.5 text-[10px] text-emerald-200">
-                              Official
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center justify-center rounded-full border border-white/30 px-2 py-0.5 text-[10px] text-white/70">
-                              Unofficial
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-1.5 px-3 align-top text-right whitespace-nowrap">
-                          <span className="font-mono text-[10px] text-white/70">
-                            {rate.created_at
-                              ? new Date(
-                                  rate.created_at
-                                ).toLocaleString("en-GB", {
-                                  year: "2-digit",
-                                  month: "2-digit",
-                                  day: "2-digit",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })
-                              : "—"}
-                          </span>
-                        </td>
-                        <td className="py-1.5 pl-3 align-top text-right space-x-1">
-                          <button
-                            type="button"
-                            onClick={() => handleEdit(rate)}
-                            className="text-[10px] px-2 py-0.5 rounded-lg border border-white/40 text-white/80 hover:bg-white hover:text-black transition-colors"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(rate.id)}
-                            className="text-[10px] px-2 py-0.5 rounded-lg border border-red-500/60 text-red-200 hover:bg-red-500 hover:text-black hover:border-red-500 transition-colors"
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+              {ratesState === "error" && (
+                <p className="text-xs text-red-300">
+                  {ratesError || "Failed to load recent FX rates."}
+                </p>
+              )}
 
-            {/* Chart + controls + smart insights */}
+              {ratesState !== "loading" &&
+                rates.length === 0 &&
+                !ratesError && (
+                  <p className="text-xs text-white/60">
+                    No FX rates have been entered yet.
+                  </p>
+                )}
+
+              {rates.length > 0 && (
+                <div className="mt-1 overflow-x-auto">
+                  <table className="min-w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="border-b border-white/15 text-white/70">
+                        <th className="text-left py-1.5 pr-3 font-medium">
+                          Date
+                        </th>
+                        <th className="text-left py-1.5 px-3 font-medium">
+                          Currency
+                        </th>
+                        <th className="text-right py-1.5 px-3 font-medium">
+                          Mid rate
+                        </th>
+                        <th className="text-center py-1.5 px-3 font-medium">
+                          Official
+                        </th>
+                        <th className="text-right py-1.5 px-3 font-medium whitespace-nowrap">
+                          Created at
+                        </th>
+                        <th className="text-right py-1.5 pl-3 font-medium">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rates.map((rate) => (
+                        <tr
+                          key={
+                            rate.id ??
+                            `${rate.asOfDate}-${rate.quoteCurrency}-${rate.created_at}`
+                          }
+                          className="border-b border-white/10 last:border-0"
+                        >
+                          <td className="py-1.5 pr-3 align-top">
+                            <span className="font-mono text-[11px]">
+                              {rate.asOfDate ?? "-"}
+                            </span>
+                          </td>
+                          <td className="py-1.5 px-3 align-top">
+                            <span className="font-mono text-[11px]">
+                              {rate.quoteCurrency}
+                            </span>
+                          </td>
+                          <td className="py-1.5 px-3 align-top text-right">
+                            <span className="font-mono text-[11px]">
+                              {typeof rate.rateMid === "number"
+                                ? rate.rateMid.toLocaleString("en-US", {
+                                    minimumFractionDigits: 4,
+                                    maximumFractionDigits: 4,
+                                  })
+                                : rate.rateMid}
+                            </span>
+                          </td>
+                          <td className="py-1.5 px-3 align-top text-center">
+                            {rate.isOfficial ? (
+                              <span className="inline-flex items-center justify-center rounded-full border border-emerald-400/70 px-2 py-0.5 text-[10px] text-emerald-200">
+                                Official
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center justify-center rounded-full border border-white/30 px-2 py-0.5 text-[10px] text-white/70">
+                                Unofficial
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-1.5 px-3 align-top text-right whitespace-nowrap">
+                            <span className="font-mono text-[10px] text-white/70">
+                              {rate.created_at
+                                ? new Date(
+                                    rate.created_at
+                                  ).toLocaleString("en-GB", {
+                                    year: "2-digit",
+                                    month: "2-digit",
+                                    day: "2-digit",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })
+                                : "—"}
+                            </span>
+                          </td>
+                          <td className="py-1.5 pl-3 align-top text-right space-x-1">
+                            <button
+                              type="button"
+                              onClick={() => handleEdit(rate)}
+                              className="text-[10px] px-2 py-0.5 rounded-lg border border-white/40 text-white/80 hover:bg-white hover:text-black transition-colors"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(rate.id)}
+                              className="text-[10px] px-2 py-0.5 rounded-lg border border-red-500/60 text-red-200 hover:bg-red-500 hover:text-black hover:border-red-500 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Chart + smart insights pinned at bottom of panel */}
             <FxTrendChart />
           </section>
         </div>
