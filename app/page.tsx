@@ -46,14 +46,6 @@ type LatestRatesResponse = {
   rates: Record<string, number>;
 };
 
-type HistoryResponse = {
-  pair: string;
-  base: string;
-  quote: string;
-  points: { date: string; mid: number }[];
-  meta: { from: string; to: string; count: number };
-};
-
 type RecentRatesResponse = {
   data: {
     id: number;
@@ -103,7 +95,7 @@ async function fetchJson<T>(path: string): Promise<T | null> {
 }
 
 /**
- * Simple rule-based “AI-style” commentary for USD/SSP,
+ * Simple rule-based commentary for USD/SSP,
  * built from the summary + 30d range.
  */
 function buildUsdSspCommentary(
@@ -177,15 +169,12 @@ function sliceHistoryPoints(
 }
 
 export default async function HomePage() {
-  // ⬇️ Minimal change: use ONE full history call and slice on the frontend.
-  const [latestRates, usdSummary, fullHistory, recentRates] = await Promise.all(
-    [
-      fetchJson<LatestRatesResponse>("/api/v1/rates/latest?base=SSP"),
-      fetchJson<MarketSummary>("/api/v1/summary/market?base=SSP&quote=USD"),
-      fetchJson<HistoryResponse>("/api/v1/rates/history?base=SSP&quote=USD"),
-      fetchJson<RecentRatesResponse>("/api/v1/rates/recent?base=SSP&limit=10"),
-    ]
-  );
+  // Use only existing endpoints: latest, summary, recent.
+  const [latestRates, usdSummary, recentRates] = await Promise.all([
+    fetchJson<LatestRatesResponse>("/api/v1/rates/latest?base=SSP"),
+    fetchJson<MarketSummary>("/api/v1/summary/market?base=SSP&quote=USD"),
+    fetchJson<RecentRatesResponse>("/api/v1/rates/recent?base=SSP&limit=365"),
+  ]);
 
   const latestDate = latestRates?.as_of_date ?? "-";
   const latestBase = latestRates?.base ?? "SSP";
@@ -193,11 +182,19 @@ export default async function HomePage() {
   const usdMid = usdSummary?.mid_rate ?? null;
   const usdChangePct = usdSummary?.change_pct_vs_previous ?? null;
 
-  const allHistoryPoints = fullHistory?.points ?? [];
+  // Build USD/SSP history from recent records
+  const usdHistoryPoints =
+    recentRates?.data
+      ?.filter((row) => row.quote_currency === "USD")
+      .sort((a, b) => a.as_of_date.localeCompare(b.as_of_date))
+      .map((row) => ({
+        date: row.as_of_date,
+        mid: row.rate_mid,
+      })) ?? [];
 
-  const history30Points = sliceHistoryPoints(allHistoryPoints, 30);
-  const history90Points = sliceHistoryPoints(allHistoryPoints, 90);
-  const history365Points = sliceHistoryPoints(allHistoryPoints, 365);
+  const history30Points = sliceHistoryPoints(usdHistoryPoints, 30);
+  const history90Points = sliceHistoryPoints(usdHistoryPoints, 90);
+  const history365Points = sliceHistoryPoints(usdHistoryPoints, 365);
 
   const usdMin30 =
     history30Points.length > 0
@@ -218,7 +215,7 @@ export default async function HomePage() {
   const fxInsights = usdSummary ? buildInsightsFromSummary(usdSummary) : [];
 
   const historySeries =
-    allHistoryPoints.length > 1
+    usdHistoryPoints.length > 1
       ? [
           {
             label: "30d",
@@ -237,8 +234,8 @@ export default async function HomePage() {
           },
           {
             label: "All",
-            days: fullHistory?.meta?.count ?? allHistoryPoints.length,
-            points: allHistoryPoints,
+            days: usdHistoryPoints.length,
+            points: usdHistoryPoints,
           },
         ].filter((s) => s.points.length > 1)
       : [];
@@ -250,6 +247,12 @@ export default async function HomePage() {
           max30: usdMax30,
         })
       : null;
+
+  // For the table we want most recent first
+  const recentTableRows =
+    recentRates?.data
+      ?.slice()
+      .sort((a, b) => b.as_of_date.localeCompare(a.as_of_date)) ?? [];
 
   return (
     <main className="min-h-screen bg-black text-zinc-100">
@@ -424,7 +427,7 @@ export default async function HomePage() {
               </div>
             </div>
 
-            {/* History chart */}
+            {/* History chart – now built from /api/v1/rates/recent */}
             {historySeries.length > 0 && <FxHistoryChart series={historySeries} />}
 
             <p className="text-[0.7rem] text-zinc-500">
@@ -591,8 +594,8 @@ export default async function HomePage() {
                   <div className="px-3 py-2 text-right">Flags</div>
                 </div>
                 <div className="max-h-64 overflow-y-auto text-xs">
-                  {recentRates?.data && recentRates.data.length > 0 ? (
-                    recentRates.data.map((row) => (
+                  {recentTableRows.length > 0 ? (
+                    recentTableRows.map((row) => (
                       <div
                         key={row.id}
                         className="grid grid-cols-[1.1fr_0.8fr_0.7fr] border-t border-zinc-900/80 px-3 py-2"
