@@ -222,6 +222,9 @@ export default async function HomePage() {
       ? historyAll.points
       : history365?.points ?? [];
 
+  // mark as used so TS doesn't complain, but we don't expose "All" in the chart
+  void allHistoryPoints;
+
   const historySeries = [
     {
       label: "30d",
@@ -237,11 +240,6 @@ export default async function HomePage() {
       label: "365d",
       days: 365,
       points: history365?.points ?? [],
-    },
-    {
-      label: "All",
-      days: 0, // not used for filtering in the chart, just a label
-      points: allHistoryPoints,
     },
   ].filter((s) => s.points.length > 1);
 
