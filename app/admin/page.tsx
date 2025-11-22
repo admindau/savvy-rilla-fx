@@ -101,7 +101,7 @@ function FxTrendChart() {
         for (const cur of CURRENCY_OPTIONS) {
           try {
             const res = await fetch(
-              `/api/admin/chart-data?quote=${encodeURIComponent(cur)}&limit=365`
+              `/api/admin/chart-data?quote=${encodeURIComponent(cur)}`
             );
             const json = await res.json();
 
