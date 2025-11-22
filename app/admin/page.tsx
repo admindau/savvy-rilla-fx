@@ -169,7 +169,9 @@ function FxTrendChart() {
     if (pts) pts.forEach((p) => dateSet.add(p.date));
   });
 
-  const labels = Array.from(dateSet).sort();
+  const labels = Array.from(dateSet).sort(
+  (a, b) => new Date(a).getTime() - new Date(b).getTime()
+  );
 
   const insights = (() => {
     const pts = filteredSeries[selectedCurrency];
