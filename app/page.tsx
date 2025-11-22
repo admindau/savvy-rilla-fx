@@ -46,6 +46,14 @@ type LatestRatesResponse = {
   rates: Record<string, number>;
 };
 
+type HistoryResponse = {
+  pair: string;
+  base: string;
+  quote: string;
+  points: { date: string; mid: number }[];
+  meta: { from: string; to: string; count: number };
+};
+
 type RecentRatesResponse = {
   data: {
     id: number;
@@ -95,7 +103,7 @@ async function fetchJson<T>(path: string): Promise<T | null> {
 }
 
 /**
- * Simple rule-based commentary for USD/SSP,
+ * Simple rule-based “AI-style” commentary for USD/SSP,
  * built from the summary + 30d range.
  */
 function buildUsdSspCommentary(
@@ -158,22 +166,30 @@ function buildUsdSspCommentary(
   return `${sentence1}${sentence2}${sentence3}`.trim();
 }
 
-// Helper: slice a full history series into the last N points (or all).
-function sliceHistoryPoints(
-  points: { date: string; mid: number }[],
-  days: number | null
-) {
-  if (!points || points.length === 0) return [];
-  if (days == null || points.length <= days) return points;
-  return points.slice(points.length - days);
-}
-
 export default async function HomePage() {
-  // Use only existing endpoints: latest, summary, recent.
-  const [latestRates, usdSummary, recentRates] = await Promise.all([
+  const [
+    latestRates,
+    usdSummary,
+    history30,
+    history90,
+    history365,
+    historyAll,
+    recentRates,
+  ] = await Promise.all([
     fetchJson<LatestRatesResponse>("/api/v1/rates/latest?base=SSP"),
     fetchJson<MarketSummary>("/api/v1/summary/market?base=SSP&quote=USD"),
-    fetchJson<RecentRatesResponse>("/api/v1/rates/recent?base=SSP&limit=365"),
+    fetchJson<HistoryResponse>(
+      "/api/v1/rates/history?base=SSP&quote=USD&days=30"
+    ),
+    fetchJson<HistoryResponse>(
+      "/api/v1/rates/history?base=SSP&quote=USD&days=90"
+    ),
+    fetchJson<HistoryResponse>(
+      "/api/v1/rates/history?base=SSP&quote=USD&days=365"
+    ),
+    // "All" history – backend can treat missing `days` as full history.
+    fetchJson<HistoryResponse>("/api/v1/rates/history?base=SSP&quote=USD"),
+    fetchJson<RecentRatesResponse>("/api/v1/rates/recent?base=SSP&limit=10"),
   ]);
 
   const latestDate = latestRates?.as_of_date ?? "-";
@@ -182,27 +198,13 @@ export default async function HomePage() {
   const usdMid = usdSummary?.mid_rate ?? null;
   const usdChangePct = usdSummary?.change_pct_vs_previous ?? null;
 
-  // Build USD/SSP history from recent records
-  const usdHistoryPoints =
-    recentRates?.data
-      ?.filter((row) => row.quote_currency === "USD")
-      .sort((a, b) => a.as_of_date.localeCompare(b.as_of_date))
-      .map((row) => ({
-        date: row.as_of_date,
-        mid: row.rate_mid,
-      })) ?? [];
-
-  const history30Points = sliceHistoryPoints(usdHistoryPoints, 30);
-  const history90Points = sliceHistoryPoints(usdHistoryPoints, 90);
-  const history365Points = sliceHistoryPoints(usdHistoryPoints, 365);
-
   const usdMin30 =
-    history30Points.length > 0
-      ? Math.min(...history30Points.map((p) => p.mid))
+    history30?.points && history30.points.length > 0
+      ? Math.min(...history30.points.map((p) => p.mid))
       : null;
   const usdMax30 =
-    history30Points.length > 0
-      ? Math.max(...history30Points.map((p) => p.mid))
+    history30?.points && history30.points.length > 0
+      ? Math.max(...history30.points.map((p) => p.mid))
       : null;
 
   const latestRatesArray =
@@ -214,31 +216,34 @@ export default async function HomePage() {
 
   const fxInsights = usdSummary ? buildInsightsFromSummary(usdSummary) : [];
 
-  const historySeries =
-    usdHistoryPoints.length > 1
-      ? [
-          {
-            label: "30d",
-            days: 30,
-            points: history30Points,
-          },
-          {
-            label: "90d",
-            days: 90,
-            points: history90Points,
-          },
-          {
-            label: "365d",
-            days: 365,
-            points: history365Points,
-          },
-          {
-            label: "All",
-            days: usdHistoryPoints.length,
-            points: usdHistoryPoints,
-          },
-        ].filter((s) => s.points.length > 1)
-      : [];
+  // If "all" history is missing or super short, fall back to 365d series
+  const allHistoryPoints =
+    historyAll?.points && historyAll.points.length > 1
+      ? historyAll.points
+      : history365?.points ?? [];
+
+  const historySeries = [
+    {
+      label: "30d",
+      days: 30,
+      points: history30?.points ?? [],
+    },
+    {
+      label: "90d",
+      days: 90,
+      points: history90?.points ?? [],
+    },
+    {
+      label: "365d",
+      days: 365,
+      points: history365?.points ?? [],
+    },
+    {
+      label: "All",
+      days: historyAll?.meta?.count ?? history365?.meta?.count ?? 0,
+      points: allHistoryPoints,
+    },
+  ].filter((s) => s.points.length > 1);
 
   const usdCommentary =
     usdSummary != null
@@ -247,12 +252,6 @@ export default async function HomePage() {
           max30: usdMax30,
         })
       : null;
-
-  // For the table we want most recent first
-  const recentTableRows =
-    recentRates?.data
-      ?.slice()
-      .sort((a, b) => b.as_of_date.localeCompare(a.as_of_date)) ?? [];
 
   return (
     <main className="min-h-screen bg-black text-zinc-100">
@@ -427,7 +426,7 @@ export default async function HomePage() {
               </div>
             </div>
 
-            {/* History chart – now built from /api/v1/rates/recent */}
+            {/* History chart */}
             {historySeries.length > 0 && <FxHistoryChart series={historySeries} />}
 
             <p className="text-[0.7rem] text-zinc-500">
@@ -594,8 +593,8 @@ export default async function HomePage() {
                   <div className="px-3 py-2 text-right">Flags</div>
                 </div>
                 <div className="max-h-64 overflow-y-auto text-xs">
-                  {recentTableRows.length > 0 ? (
-                    recentTableRows.map((row) => (
+                  {recentRates?.data && recentRates.data.length > 0 ? (
+                    recentRates.data.map((row) => (
                       <div
                         key={row.id}
                         className="grid grid-cols-[1.1fr_0.8fr_0.7fr] border-t border-zinc-900/80 px-3 py-2"
