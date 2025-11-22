@@ -166,31 +166,26 @@ function buildUsdSspCommentary(
   return `${sentence1}${sentence2}${sentence3}`.trim();
 }
 
+// Helper: slice a full history series into the last N points (or all).
+function sliceHistoryPoints(
+  points: { date: string; mid: number }[],
+  days: number | null
+) {
+  if (!points || points.length === 0) return [];
+  if (days == null || points.length <= days) return points;
+  return points.slice(points.length - days);
+}
+
 export default async function HomePage() {
-  const [
-    latestRates,
-    usdSummary,
-    history30,
-    history90,
-    history365,
-    historyAll,
-    recentRates,
-  ] = await Promise.all([
-    fetchJson<LatestRatesResponse>("/api/v1/rates/latest?base=SSP"),
-    fetchJson<MarketSummary>("/api/v1/summary/market?base=SSP&quote=USD"),
-    fetchJson<HistoryResponse>(
-      "/api/v1/rates/history?base=SSP&quote=USD&days=30"
-    ),
-    fetchJson<HistoryResponse>(
-      "/api/v1/rates/history?base=SSP&quote=USD&days=90"
-    ),
-    fetchJson<HistoryResponse>(
-      "/api/v1/rates/history?base=SSP&quote=USD&days=365"
-    ),
-    // "All" history – backend can treat missing `days` as full history.
-    fetchJson<HistoryResponse>("/api/v1/rates/history?base=SSP&quote=USD"),
-    fetchJson<RecentRatesResponse>("/api/v1/rates/recent?base=SSP&limit=10"),
-  ]);
+  // ⬇️ Minimal change: use ONE full history call and slice on the frontend.
+  const [latestRates, usdSummary, fullHistory, recentRates] = await Promise.all(
+    [
+      fetchJson<LatestRatesResponse>("/api/v1/rates/latest?base=SSP"),
+      fetchJson<MarketSummary>("/api/v1/summary/market?base=SSP&quote=USD"),
+      fetchJson<HistoryResponse>("/api/v1/rates/history?base=SSP&quote=USD"),
+      fetchJson<RecentRatesResponse>("/api/v1/rates/recent?base=SSP&limit=10"),
+    ]
+  );
 
   const latestDate = latestRates?.as_of_date ?? "-";
   const latestBase = latestRates?.base ?? "SSP";
@@ -198,13 +193,19 @@ export default async function HomePage() {
   const usdMid = usdSummary?.mid_rate ?? null;
   const usdChangePct = usdSummary?.change_pct_vs_previous ?? null;
 
+  const allHistoryPoints = fullHistory?.points ?? [];
+
+  const history30Points = sliceHistoryPoints(allHistoryPoints, 30);
+  const history90Points = sliceHistoryPoints(allHistoryPoints, 90);
+  const history365Points = sliceHistoryPoints(allHistoryPoints, 365);
+
   const usdMin30 =
-    history30?.points && history30.points.length > 0
-      ? Math.min(...history30.points.map((p) => p.mid))
+    history30Points.length > 0
+      ? Math.min(...history30Points.map((p) => p.mid))
       : null;
   const usdMax30 =
-    history30?.points && history30.points.length > 0
-      ? Math.max(...history30.points.map((p) => p.mid))
+    history30Points.length > 0
+      ? Math.max(...history30Points.map((p) => p.mid))
       : null;
 
   const latestRatesArray =
@@ -216,34 +217,31 @@ export default async function HomePage() {
 
   const fxInsights = usdSummary ? buildInsightsFromSummary(usdSummary) : [];
 
-  // If "all" history is missing or super short, fall back to 365d series
-  const allHistoryPoints =
-    historyAll?.points && historyAll.points.length > 1
-      ? historyAll.points
-      : history365?.points ?? [];
-
-  const historySeries = [
-    {
-      label: "30d",
-      days: 30,
-      points: history30?.points ?? [],
-    },
-    {
-      label: "90d",
-      days: 90,
-      points: history90?.points ?? [],
-    },
-    {
-      label: "365d",
-      days: 365,
-      points: history365?.points ?? [],
-    },
-    {
-      label: "All",
-      days: historyAll?.meta?.count ?? history365?.meta?.count ?? 0,
-      points: allHistoryPoints,
-    },
-  ].filter((s) => s.points.length > 1);
+  const historySeries =
+    allHistoryPoints.length > 1
+      ? [
+          {
+            label: "30d",
+            days: 30,
+            points: history30Points,
+          },
+          {
+            label: "90d",
+            days: 90,
+            points: history90Points,
+          },
+          {
+            label: "365d",
+            days: 365,
+            points: history365Points,
+          },
+          {
+            label: "All",
+            days: fullHistory?.meta?.count ?? allHistoryPoints.length,
+            points: allHistoryPoints,
+          },
+        ].filter((s) => s.points.length > 1)
+      : [];
 
   const usdCommentary =
     usdSummary != null
