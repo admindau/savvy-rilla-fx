@@ -67,8 +67,272 @@ const CURRENCY_COLORS: Record<string, string> = {
 };
 
 /**
+ * AI Insights Coach – right column panel
+ */
+
+type MarketSummary = {
+  base: string;
+  quote: string;
+  as_of_date: string;
+  mid_rate: number;
+  change_pct_vs_previous: number | null;
+  range: {
+    window_days: number;
+    high: number;
+    low: number;
+  };
+  trend: {
+    window_days: number;
+    label: "Range-Bound" | "Uptrend" | "Downtrend" | string;
+  };
+  volatility: {
+    window_days: number;
+    avg_daily_move_pct: number | null;
+  };
+};
+
+function AiInsightsCoach() {
+  const [quote, setQuote] = useState<string>("USD");
+  const [summary, setSummary] = useState<MarketSummary | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const res = await fetch(
+          `/api/v1/summary/market?base=SSP&quote=${encodeURIComponent(quote)}`
+        );
+        const json = await res.json();
+
+        if (!res.ok || json?.error) {
+          if (!cancelled) {
+            setError(
+              json?.error?.message ||
+                json?.error ||
+                json?.message ||
+                "Failed to load market summary."
+            );
+            setSummary(null);
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (!cancelled) {
+          setSummary(json as MarketSummary);
+          setLoading(false);
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setError(
+            err?.message || "Unexpected error while loading market summary."
+          );
+          setSummary(null);
+          setLoading(false);
+        }
+      }
+    }
+
+    load();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [quote]);
+
+  function renderBody() {
+    if (loading) {
+      return (
+        <p className="text-xs text-white/60">
+          Thinking through the latest moves…
+        </p>
+      );
+    }
+
+    if (error) {
+      return (
+        <p className="text-xs text-red-300">
+          {error || "Failed to load AI insights."}
+        </p>
+      );
+    }
+
+    if (!summary) {
+      return (
+        <p className="text-xs text-white/60">
+          No data yet for this currency pair.
+        </p>
+      );
+    }
+
+    const { base, quote, as_of_date, mid_rate, change_pct_vs_previous } =
+      summary;
+
+    let changeSentence: string;
+    if (
+      change_pct_vs_previous === null ||
+      change_pct_vs_previous === undefined
+    ) {
+      changeSentence = "No previous fixing available for a comparison.";
+    } else if (Math.abs(change_pct_vs_previous) < 0.01) {
+      changeSentence = "Essentially unchanged versus the previous fixing.";
+    } else {
+      const direction = change_pct_vs_previous > 0 ? "higher" : "lower";
+      changeSentence = `${direction} ${Math.abs(
+        change_pct_vs_previous
+      ).toFixed(2)}% versus the previous fixing.`;
+    }
+
+    const trendLabel = summary.trend?.label ?? "Range-Bound";
+    const trendWindow = summary.trend?.window_days ?? 3;
+    let humanTrend: string;
+    if (trendLabel === "Uptrend") {
+      humanTrend = "short-term upward trend";
+    } else if (trendLabel === "Downtrend") {
+      humanTrend = "short-term downward trend";
+    } else {
+      humanTrend = "range-bound pattern";
+    }
+
+    const rangeHigh = summary.range?.high ?? null;
+    const rangeLow = summary.range?.low ?? null;
+    const rangeWindow = summary.range?.window_days ?? 7;
+
+    const vol = summary.volatility?.avg_daily_move_pct ?? null;
+    const volWindow = summary.volatility?.window_days ?? 30;
+
+    let volLabel = "moderate";
+    if (vol !== null) {
+      if (vol < 0.15) volLabel = "very low";
+      else if (vol < 0.35) volLabel = "low";
+      else if (vol < 0.7) volLabel = "moderate";
+      else if (vol < 1.2) volLabel = "elevated";
+      else volLabel = "high";
+    }
+
+    return (
+      <>
+        <p className="text-xs text-white/80 mb-2">
+          As of{" "}
+          <span className="font-mono">
+            {as_of_date || "—"}
+          </span>
+          , the{" "}
+          <span className="font-semibold">
+            {quote}/{base}
+          </span>{" "}
+          mid rate is{" "}
+          <span className="font-mono">
+            {mid_rate.toLocaleString("en-US", {
+              minimumFractionDigits: 4,
+              maximumFractionDigits: 4,
+            })}
+          </span>
+          . {changeSentence}
+        </p>
+
+        <ul className="space-y-1.5 text-[11px] text-white/75">
+          <li>
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-white/70 mr-1 align-middle" />
+            Trend:{" "}
+            <span className="font-medium">{humanTrend}</span> over the last{" "}
+            {trendWindow} days.
+          </li>
+
+          {rangeHigh !== null && rangeLow !== null && (
+            <li>
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-white/70 mr-1 align-middle" />
+              {rangeWindow}-day range:{" "}
+              <span className="font-mono">
+                {rangeLow.toLocaleString("en-US", {
+                  minimumFractionDigits: 4,
+                  maximumFractionDigits: 4,
+                })}
+              </span>{" "}
+              –{" "}
+              <span className="font-mono">
+                {rangeHigh.toLocaleString("en-US", {
+                  minimumFractionDigits: 4,
+                  maximumFractionDigits: 4,
+                })}
+              </span>{" "}
+              SSP per {quote}.
+            </li>
+          )}
+
+          {vol !== null && (
+            <li>
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-white/70 mr-1 align-middle" />
+              Volatility:{" "}
+              <span className="font-medium">{volLabel}</span> — average daily
+              move of{" "}
+              <span className="font-mono">{vol.toFixed(2)}%</span> over the last{" "}
+              {volWindow} days.
+            </li>
+          )}
+
+          <li className="text-white/55">
+            <span className="inline-block w-1.5 h-1.5 rounded-full bg-white/40 mr-1 align-middle" />
+            Use this as a quick sense-check when entering new official rates or
+            briefing stakeholders.
+          </li>
+        </ul>
+
+        <p className="mt-2 text-[10px] text-white/45">
+          These insights are descriptive, not a trading signal.
+        </p>
+      </>
+    );
+  }
+
+  return (
+    <div className="border border-white/10 rounded-xl p-4 bg-black/40 flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold text-white/85">
+            AI Insights Coach
+          </h2>
+          <p className="text-[11px] text-white/60">
+            Quick read of the FX tape for {quote}/SSP.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-1 justify-end">
+          {CURRENCY_OPTIONS.map((cur) => {
+            const isActive = quote === cur;
+            return (
+              <button
+                key={cur}
+                type="button"
+                onClick={() => setQuote(cur)}
+                className={`px-2 py-0.5 rounded-full text-[10px] border ${
+                  isActive
+                    ? "bg-white text-black border-white"
+                    : "bg-black text-white/70 border-white/30 hover:border-white/70"
+                } transition-colors`}
+              >
+                {cur}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {renderBody()}
+    </div>
+  );
+}
+
+/**
  * LEFT-COLUMN Smart Insights + Multi-series Chart
  */
+
 function FxTrendChart() {
   const [selectedCurrency, setSelectedCurrency] = useState<string>("USD");
   const [activeCurrencies, setActiveCurrencies] = useState<string[]>(["USD"]);
@@ -78,7 +342,6 @@ function FxTrendChart() {
   const [series, setSeries] = useState<Record<string, FxChartPoint[]>>({});
   const chartRef = useRef<any>(null);
 
-  // make sure zoom plugin is only loaded on the client
   const [zoomReady, setZoomReady] = useState(false);
 
   useEffect(() => {
@@ -101,7 +364,7 @@ function FxTrendChart() {
     setSelectedCurrency(cur);
     setActiveCurrencies((prev) => {
       if (prev.includes(cur)) {
-        if (prev.length === 1) return prev; // keep at least one
+        if (prev.length === 1) return prev;
         return prev.filter((c) => c !== cur);
       }
       return [...prev, cur];
@@ -292,7 +555,6 @@ function FxTrendChart() {
     if (chart && chart.resetZoom) chart.resetZoom();
   }
 
-  // Keyboard shortcut: press "R" to reset zoom
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (
@@ -433,7 +695,7 @@ function FxTrendChart() {
         pan: {
           enabled: true,
           mode: "x",
-          modifierKey: "shift", // hold Shift to pan
+          modifierKey: "shift",
         },
         limits: {
           x: { minRange: 7 },
@@ -539,10 +801,10 @@ function FxTrendChart() {
         </p>
       )}
 
-      {/* Hint bar */}
       <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-white/55 mt-1">
         <span>
-          Scroll / pinch to zoom · <span className="font-semibold">Shift + drag</span> to pan
+          Scroll / pinch to zoom ·{" "}
+          <span className="font-semibold">Shift + drag</span> to pan
         </span>
         <span className="flex items-center gap-1">
           Press{" "}
@@ -932,144 +1194,148 @@ export default function AdminPage() {
             <FxTrendChart />
           </section>
 
-          {/* RIGHT COLUMN – scrollable recent list */}
-          <section className="border border-white/10 rounded-xl p-4 sm:p-4 bg-black/40 flex flex-col">
-            <div className="flex items-center justify-between mb-2 gap-3">
-              <h2 className="text-sm font-semibold tracking-wide uppercase text-white/80">
-                Recent FX rates
-              </h2>
-              <button
-                type="button"
-                onClick={fetchRecentRates}
-                className="text-[11px] px-2 py-1 rounded-lg border border-white/20 hover:border-white hover:bg-white hover:text-black transition-colors"
-              >
-                Refresh
-              </button>
-            </div>
+          {/* RIGHT COLUMN */}
+          <section className="flex flex-col gap-4">
+            <AiInsightsCoach />
 
-            <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1">
-              {ratesState === "loading" && (
-                <p className="text-xs text-white/60">
-                  Loading recent rates…
-                </p>
-              )}
+            <div className="border border-white/10 rounded-xl p-4 sm:p-4 bg-black/40 flex flex-col">
+              <div className="flex items-center justify-between mb-2 gap-3">
+                <h2 className="text-sm font-semibold tracking-wide uppercase text-white/80">
+                  Recent FX rates
+                </h2>
+                <button
+                  type="button"
+                  onClick={fetchRecentRates}
+                  className="text-[11px] px-2 py-1 rounded-lg border border-white/20 hover:border-white hover:bg-white hover:text-black transition-colors"
+                >
+                  Refresh
+                </button>
+              </div>
 
-              {ratesState === "error" && (
-                <p className="text-xs text-red-300">
-                  {ratesError || "Failed to load recent FX rates."}
-                </p>
-              )}
-
-              {ratesState !== "loading" &&
-                rates.length === 0 &&
-                !ratesError && (
+              <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1">
+                {ratesState === "loading" && (
                   <p className="text-xs text-white/60">
-                    No FX rates have been entered yet.
+                    Loading recent rates…
                   </p>
                 )}
 
-              {rates.length > 0 && (
-                <div className="mt-1 overflow-x-auto">
-                  <table className="min-w-full text-xs border-collapse">
-                    <thead>
-                      <tr className="border-b border-white/15 text-white/70">
-                        <th className="text-left py-1.5 pr-3 font-medium">
-                          Date
-                        </th>
-                        <th className="text-left py-1.5 px-3 font-medium">
-                          Currency
-                        </th>
-                        <th className="text-right py-1.5 px-3 font-medium">
-                          Mid rate
-                        </th>
-                        <th className="text-center py-1.5 px-3 font-medium">
-                          Official
-                        </th>
-                        <th className="text-right py-1.5 px-3 font-medium whitespace-nowrap">
-                          Created at
-                        </th>
-                        <th className="text-right py-1.5 pl-3 font-medium">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {rates.map((rate) => (
-                        <tr
-                          key={
-                            rate.id ??
-                            `${rate.asOfDate}-${rate.quoteCurrency}-${rate.created_at}`
-                          }
-                          className="border-b border-white/10 last:border-0"
-                        >
-                          <td className="py-1.5 pr-3 align-top">
-                            <span className="font-mono text-[11px]">
-                              {rate.asOfDate ?? "-"}
-                            </span>
-                          </td>
-                          <td className="py-1.5 px-3 align-top">
-                            <span className="font-mono text-[11px]">
-                              {rate.quoteCurrency}
-                            </span>
-                          </td>
-                          <td className="py-1.5 px-3 align-top text-right">
-                            <span className="font-mono text-[11px]">
-                              {typeof rate.rateMid === "number"
-                                ? rate.rateMid.toLocaleString("en-US", {
-                                    minimumFractionDigits: 4,
-                                    maximumFractionDigits: 4,
-                                  })
-                                : rate.rateMid}
-                            </span>
-                          </td>
-                          <td className="py-1.5 px-3 align-top text-center">
-                            {rate.isOfficial ? (
-                              <span className="inline-flex items-center justify-center rounded-full border border-emerald-400/70 px-2 py-0.5 text-[10px] text-emerald-200">
-                                Official
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center justify-center rounded-full border border-white/30 px-2 py-0.5 text-[10px] text-white/70">
-                                Unofficial
-                              </span>
-                            )}
-                          </td>
-                          <td className="py-1.5 px-3 align-top text-right whitespace-nowrap">
-                            <span className="font-mono text-[10px] text-white/70">
-                              {rate.created_at
-                                ? new Date(
-                                    rate.created_at
-                                  ).toLocaleString("en-GB", {
-                                    year: "2-digit",
-                                    month: "2-digit",
-                                    day: "2-digit",
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })
-                                : "—"}
-                            </span>
-                          </td>
-                          <td className="py-1.5 pl-3 align-top text-right space-x-1">
-                            <button
-                              type="button"
-                              onClick={() => handleEdit(rate)}
-                              className="text-[10px] px-2 py-0.5 rounded-lg border border-white/40 text-white/80 hover:bg-white hover:text-black transition-colors"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(rate.id)}
-                              className="text-[10px] px-2 py-0.5 rounded-lg border border-red-500/60 text-red-200 hover:bg-red-500 hover:text-black hover:border-red-500 transition-colors"
-                            >
-                              Delete
-                            </button>
-                          </td>
+                {ratesState === "error" && (
+                  <p className="text-xs text-red-300">
+                    {ratesError || "Failed to load recent FX rates."}
+                  </p>
+                )}
+
+                {ratesState !== "loading" &&
+                  rates.length === 0 &&
+                  !ratesError && (
+                    <p className="text-xs text-white/60">
+                      No FX rates have been entered yet.
+                    </p>
+                  )}
+
+                {rates.length > 0 && (
+                  <div className="mt-1 overflow-x-auto">
+                    <table className="min-w-full text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-white/15 text-white/70">
+                          <th className="text-left py-1.5 pr-3 font-medium">
+                            Date
+                          </th>
+                          <th className="text-left py-1.5 px-3 font-medium">
+                            Currency
+                          </th>
+                          <th className="text-right py-1.5 px-3 font-medium">
+                            Mid rate
+                          </th>
+                          <th className="text-center py-1.5 px-3 font-medium">
+                            Official
+                          </th>
+                          <th className="text-right py-1.5 px-3 font-medium whitespace-nowrap">
+                            Created at
+                          </th>
+                          <th className="text-right py-1.5 pl-3 font-medium">
+                            Actions
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                      </thead>
+                      <tbody>
+                        {rates.map((rate) => (
+                          <tr
+                            key={
+                              rate.id ??
+                              `${rate.asOfDate}-${rate.quoteCurrency}-${rate.created_at}`
+                            }
+                            className="border-b border-white/10 last:border-0"
+                          >
+                            <td className="py-1.5 pr-3 align-top">
+                              <span className="font-mono text-[11px]">
+                                {rate.asOfDate ?? "-"}
+                              </span>
+                            </td>
+                            <td className="py-1.5 px-3 align-top">
+                              <span className="font-mono text-[11px]">
+                                {rate.quoteCurrency}
+                              </span>
+                            </td>
+                            <td className="py-1.5 px-3 align-top text-right">
+                              <span className="font-mono text-[11px]">
+                                {typeof rate.rateMid === "number"
+                                  ? rate.rateMid.toLocaleString("en-US", {
+                                      minimumFractionDigits: 4,
+                                      maximumFractionDigits: 4,
+                                    })
+                                  : rate.rateMid}
+                              </span>
+                            </td>
+                            <td className="py-1.5 px-3 align-top text-center">
+                              {rate.isOfficial ? (
+                                <span className="inline-flex items-center justify-center rounded-full border border-emerald-400/70 px-2 py-0.5 text-[10px] text-emerald-200">
+                                  Official
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center justify-center rounded-full border border-white/30 px-2 py-0.5 text-[10px] text-white/70">
+                                  Unofficial
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-1.5 px-3 align-top text-right whitespace-nowrap">
+                              <span className="font-mono text-[10px] text-white/70">
+                                {rate.created_at
+                                  ? new Date(
+                                      rate.created_at
+                                    ).toLocaleString("en-GB", {
+                                      year: "2-digit",
+                                      month: "2-digit",
+                                      day: "2-digit",
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })
+                                  : "—"}
+                              </span>
+                            </td>
+                            <td className="py-1.5 pl-3 align-top text-right space-x-1">
+                              <button
+                                type="button"
+                                onClick={() => handleEdit(rate)}
+                                className="text-[10px] px-2 py-0.5 rounded-lg border border-white/40 text-white/80 hover:bg-white hover:text-black transition-colors"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(rate.id)}
+                                className="text-[10px] px-2 py-0.5 rounded-lg border border-red-500/60 text-red-200 hover:bg-red-500 hover:text-black hover:border-red-500 transition-colors"
+                              >
+                                Delete
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
             </div>
           </section>
         </div>
