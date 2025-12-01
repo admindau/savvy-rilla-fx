@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import {
   Chart as ChartJS,
   LineElement,
@@ -11,6 +11,7 @@ import {
   Filler,
   Legend,
 } from "chart.js";
+import zoomPlugin from "chartjs-plugin-zoom";
 import { Line } from "react-chartjs-2";
 
 ChartJS.register(
@@ -20,7 +21,8 @@ ChartJS.register(
   CategoryScale,
   Tooltip,
   Filler,
-  Legend
+  Legend,
+  zoomPlugin
 );
 
 type SaveState = "idle" | "saving" | "success" | "error";
@@ -76,6 +78,7 @@ function FxTrendChart() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [series, setSeries] = useState<Record<string, FxChartPoint[]>>({});
+  const chartRef = useRef<any>(null);
 
   function toggleCurrency(cur: string) {
     setSelectedCurrency(cur);
@@ -101,7 +104,9 @@ function FxTrendChart() {
         for (const cur of CURRENCY_OPTIONS) {
           try {
             const res = await fetch(
-              `/api/admin/chart-data?quote=${encodeURIComponent(cur)}&limit=365000`
+              `/api/admin/chart-data?quote=${encodeURIComponent(
+                cur
+              )}&limit=365000`
             );
             const json = await res.json();
 
@@ -170,7 +175,7 @@ function FxTrendChart() {
   });
 
   const labels = Array.from(dateSet).sort(
-  (a, b) => new Date(a).getTime() - new Date(b).getTime()
+    (a, b) => new Date(a).getTime() - new Date(b).getTime()
   );
 
   const insights = (() => {
@@ -372,6 +377,22 @@ function FxTrendChart() {
           },
         },
       },
+      zoom: {
+        zoom: {
+          wheel: { enabled: true },
+          pinch: { enabled: true },
+          drag: { enabled: true },
+          mode: "x",
+        },
+        pan: {
+          enabled: true,
+          mode: "x",
+          modifierKey: "shift", // hold Shift to pan
+        },
+        limits: {
+          x: { minRange: 7 },
+        },
+      },
     },
   };
 
@@ -474,7 +495,19 @@ function FxTrendChart() {
 
       {/* Chart */}
       <div className="h-36 sm:h-40 md:h-44">
-        <Line data={data} options={options} />
+        <Line ref={chartRef} data={data} options={options} />
+      </div>
+      <div className="flex justify-end mt-1">
+        <button
+          type="button"
+          onClick={() => {
+            const chart = chartRef.current?.chart || chartRef.current;
+            if (chart && chart.resetZoom) chart.resetZoom();
+          }}
+          className="px-3 py-1 text-[10px] rounded-full border border-white/30 text-white/70 hover:bg-white hover:text-black transition-colors"
+        >
+          Reset zoom
+        </button>
       </div>
     </div>
   );
@@ -853,7 +886,7 @@ export default function AdminPage() {
               </button>
             </div>
 
-            {/* 🔥 This is the only change: make the list fill the column height */}
+            {/* This list fills the column height */}
             <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1">
               {ratesState === "loading" && (
                 <p className="text-xs text-white/60">
