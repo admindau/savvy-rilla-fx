@@ -642,6 +642,21 @@ function FxTrendChart() {
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
+      // Don't hijack "R" when the user is typing in a form field
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        const isEditable = (target as any).isContentEditable;
+        if (
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          tag === "SELECT" ||
+          isEditable
+        ) {
+          return;
+        }
+      }
+
       if (
         (e.key === "r" || e.key === "R") &&
         !e.ctrlKey &&
