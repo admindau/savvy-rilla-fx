@@ -157,9 +157,15 @@ function AiInsightsCoach() {
 
     if (error) {
       return (
-        <p className="text-xs text-red-300">
-          {error || "Failed to load AI insights."}
-        </p>
+        <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2">
+          <p className="text-[11px] text-red-200 mb-1">
+            {error || "Failed to load AI insights."}
+          </p>
+          <p className="text-[10px] text-red-100/80">
+            Try switching the currency, or refreshing the page if this
+            persists.
+          </p>
+        </div>
       );
     }
 
@@ -174,6 +180,7 @@ function AiInsightsCoach() {
     const { base, quote, as_of_date, mid_rate, change_pct_vs_previous } =
       summary;
 
+    // --- change sentence ---
     let changeSentence: string;
     if (
       change_pct_vs_previous === null ||
@@ -189,6 +196,7 @@ function AiInsightsCoach() {
       ).toFixed(2)}% versus the previous fixing.`;
     }
 
+    // --- trend ---
     const trendLabel = summary.trend?.label ?? "Range-Bound";
     const trendWindow = summary.trend?.window_days ?? 3;
     let humanTrend: string;
@@ -200,10 +208,12 @@ function AiInsightsCoach() {
       humanTrend = "range-bound pattern";
     }
 
+    // --- range ---
     const rangeHigh = summary.range?.high ?? null;
     const rangeLow = summary.range?.low ?? null;
     const rangeWindow = summary.range?.window_days ?? 7;
 
+    // --- volatility ---
     const vol = summary.volatility?.avg_daily_move_pct ?? null;
     const volWindow = summary.volatility?.window_days ?? 30;
 
@@ -216,8 +226,80 @@ function AiInsightsCoach() {
       else volLabel = "high";
     }
 
+    // --- compact headline at the top of the card ---
+    const headlineParts: string[] = [];
+
+    if (trendLabel === "Uptrend") {
+      headlineParts.push("SSP is weakening (uptrend)");
+    } else if (trendLabel === "Downtrend") {
+      headlineParts.push("SSP is strengthening (downtrend)");
+    } else {
+      headlineParts.push("FX looks range-bound");
+    }
+
+    if (vol !== null) {
+      headlineParts.push(`${volLabel} volatility`);
+    }
+
+    if (
+      change_pct_vs_previous !== null &&
+      change_pct_vs_previous !== undefined &&
+      Math.abs(change_pct_vs_previous) >= 0.1
+    ) {
+      const dailyDir = change_pct_vs_previous > 0 ? "higher" : "lower";
+      headlineParts.push(
+        `${dailyDir} ${Math.abs(change_pct_vs_previous).toFixed(2)}% vs last fix`
+      );
+    }
+
+    const headline =
+      headlineParts.length > 0
+        ? headlineParts.join(" · ")
+        : `${quote}/${base} snapshot`;
+
     return (
       <>
+        {/* headline + chips row */}
+        <p className="text-[11px] font-medium text-emerald-200 mb-1">
+          {headline}
+        </p>
+
+        <div className="flex flex-wrap gap-1 mb-2 text-[10px]">
+          <span className="inline-flex items-center rounded-full border border-white/30 px-2 py-0.5 text-white/80">
+            <span className="mr-1 text-[9px]">📈</span>
+            {humanTrend}
+          </span>
+
+          {rangeHigh !== null && rangeLow !== null && (
+            <span className="inline-flex items-center rounded-full border border-white/20 px-2 py-0.5 text-white/75">
+              <span className="mr-1 text-[9px]">📊</span>
+              {rangeWindow}-day range&nbsp;
+              <span className="font-mono">
+                {rangeLow.toLocaleString("en-US", {
+                  minimumFractionDigits: 4,
+                  maximumFractionDigits: 4,
+                })}
+              </span>
+              &nbsp;–&nbsp;
+              <span className="font-mono">
+                {rangeHigh.toLocaleString("en-US", {
+                  minimumFractionDigits: 4,
+                  maximumFractionDigits: 4,
+                })}
+              </span>
+            </span>
+          )}
+
+          {vol !== null && (
+            <span className="inline-flex items-center rounded-full border border-white/20 px-2 py-0.5 text-white/75">
+              <span className="mr-1 text-[9px]">🌊</span>
+              {volLabel} vol ·{" "}
+              <span className="font-mono ml-1">{vol.toFixed(2)}%</span>
+            </span>
+          )}
+        </div>
+
+        {/* main narrative paragraph */}
         <p className="text-xs text-white/80 mb-2">
           As of{" "}
           <span className="font-mono">
@@ -237,6 +319,7 @@ function AiInsightsCoach() {
           . {changeSentence}
         </p>
 
+        {/* bullet insights */}
         <ul className="space-y-1.5 text-[11px] text-white/75">
           <li>
             <span className="inline-block w-1.5 h-1.5 rounded-full bg-white/70 mr-1 align-middle" />
@@ -417,8 +500,8 @@ function FxTrendChart() {
           setError(
             err?.message || "Unexpected error while loading FX chart data."
           );
-          setSeries({});
-          setLoading(false);
+          setSeries({}),
+            setLoading(false);
         }
       }
     }
@@ -551,8 +634,10 @@ function FxTrendChart() {
   })();
 
   function handleResetZoom() {
-    const chart = chartRef.current?.chart || chartRef.current;
-    if (chart && chart.resetZoom) chart.resetZoom();
+    const chart = (chartRef.current as any)?.chart || chartRef.current;
+    if (chart && typeof chart.resetZoom === "function") {
+      chart.resetZoom();
+    }
   }
 
   useEffect(() => {
