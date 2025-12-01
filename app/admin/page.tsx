@@ -11,7 +11,6 @@ import {
   Filler,
   Legend,
 } from "chart.js";
-import zoomPlugin from "chartjs-plugin-zoom";
 import { Line } from "react-chartjs-2";
 
 ChartJS.register(
@@ -21,8 +20,7 @@ ChartJS.register(
   CategoryScale,
   Tooltip,
   Filler,
-  Legend,
-  zoomPlugin
+  Legend
 );
 
 type SaveState = "idle" | "saving" | "success" | "error";
@@ -79,6 +77,27 @@ function FxTrendChart() {
   const [error, setError] = useState<string | null>(null);
   const [series, setSeries] = useState<Record<string, FxChartPoint[]>>({});
   const chartRef = useRef<any>(null);
+
+  // make sure zoom plugin is only loaded on the client
+  const [zoomReady, setZoomReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      // this code only runs in the browser
+      const mod = await import("chartjs-plugin-zoom");
+      if (cancelled) return;
+      const zoomPlugin = mod.default;
+      // registering twice is harmless, but this keeps it simple
+      ChartJS.register(zoomPlugin);
+      setZoomReady(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function toggleCurrency(cur: string) {
     setSelectedCurrency(cur);
@@ -493,10 +512,16 @@ function FxTrendChart() {
         </p>
       )}
 
-      {/* Chart */}
       <div className="h-36 sm:h-40 md:h-44">
-        <Line ref={chartRef} data={data} options={options} />
+        {zoomReady ? (
+          <Line ref={chartRef} data={data} options={options} />
+        ) : (
+          <div className="flex h-full items-center justify-center text-[11px] text-white/60">
+            Loading chart…
+          </div>
+        )}
       </div>
+
       <div className="flex justify-end mt-1">
         <button
           type="button"
@@ -861,13 +886,11 @@ export default function AdminPage() {
               </button>
             </form>
 
-            {/* Caption */}
             <p className="mt-2 text-[11px] text-center text-white/50">
               Below is a live snapshot of SSP vs key currencies based on the
               latest entries.
             </p>
 
-            {/* Smart Insights + Chart */}
             <FxTrendChart />
           </section>
 
@@ -886,7 +909,6 @@ export default function AdminPage() {
               </button>
             </div>
 
-            {/* This list fills the column height */}
             <div className="mt-2 flex-1 min-h-0 overflow-y-auto pr-1">
               {ratesState === "loading" && (
                 <p className="text-xs text-white/60">
