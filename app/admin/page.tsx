@@ -85,11 +85,9 @@ function FxTrendChart() {
     let cancelled = false;
 
     (async () => {
-      // this code only runs in the browser
       const mod = await import("chartjs-plugin-zoom");
       if (cancelled) return;
       const zoomPlugin = mod.default;
-      // registering twice is harmless, but this keeps it simple
       ChartJS.register(zoomPlugin);
       setZoomReady(true);
     })();
@@ -289,6 +287,30 @@ function FxTrendChart() {
     };
   })();
 
+  function handleResetZoom() {
+    const chart = chartRef.current?.chart || chartRef.current;
+    if (chart && chart.resetZoom) chart.resetZoom();
+  }
+
+  // Keyboard shortcut: press "R" to reset zoom
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (
+        (e.key === "r" || e.key === "R") &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.altKey &&
+        !e.shiftKey
+      ) {
+        e.preventDefault();
+        handleResetZoom();
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   if (loading) {
     return (
       <div className="mt-3 border border-white/10 rounded-xl px-3 py-2">
@@ -327,17 +349,22 @@ function FxTrendChart() {
       });
 
       const color = CURRENCY_COLORS[cur] || "#ffffff";
+      const isSelected = cur === selectedCurrency;
 
       return {
         label: `${cur}/SSP mid rate`,
         data: values,
         borderColor: color,
-        backgroundColor: "rgba(255,255,255,0.08)",
-        pointRadius: 2,
-        pointHoverRadius: 4,
+        backgroundColor: isSelected
+          ? "rgba(255,255,255,0.12)"
+          : "rgba(255,255,255,0.06)",
+        pointRadius: isSelected ? 3 : 1.5,
+        pointHoverRadius: isSelected ? 5 : 3,
         pointBackgroundColor: color,
         tension: 0.25,
         fill: false,
+        borderWidth: isSelected ? 2.4 : 1.2,
+        borderDash: isSelected ? [] : [4, 3],
       };
     });
 
@@ -512,6 +539,20 @@ function FxTrendChart() {
         </p>
       )}
 
+      {/* Hint bar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-white/55 mt-1">
+        <span>
+          Scroll / pinch to zoom · <span className="font-semibold">Shift + drag</span> to pan
+        </span>
+        <span className="flex items-center gap-1">
+          Press{" "}
+          <span className="inline-flex items-center justify-center rounded border border-white/40 px-1 py-0.5 font-mono text-[9px]">
+            R
+          </span>{" "}
+          to reset zoom
+        </span>
+      </div>
+
       <div className="h-36 sm:h-40 md:h-44">
         {zoomReady ? (
           <Line ref={chartRef} data={data} options={options} />
@@ -525,10 +566,7 @@ function FxTrendChart() {
       <div className="flex justify-end mt-1">
         <button
           type="button"
-          onClick={() => {
-            const chart = chartRef.current?.chart || chartRef.current;
-            if (chart && chart.resetZoom) chart.resetZoom();
-          }}
+          onClick={handleResetZoom}
           className="px-3 py-1 text-[10px] rounded-full border border-white/30 text-white/70 hover:bg-white hover:text-black transition-colors"
         >
           Reset zoom
