@@ -12,7 +12,14 @@ import {
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 
-ChartJS.register(LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend);
+ChartJS.register(
+  LineElement,
+  PointElement,
+  LinearScale,
+  CategoryScale,
+  Tooltip,
+  Legend
+);
 
 type FxChartPoint = { date: string; mid: number };
 
@@ -53,11 +60,19 @@ const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
   { key: "all", label: "All" },
 ];
 
-const RANGE_DAYS: Record<RangeKey, number | null> = {
+/**
+ * IMPORTANT:
+ * We are NOT touching the API route.
+ * So "All" must be implemented as "a very large days window"
+ * instead of relying on "missing days" semantics.
+ *
+ * 36500 days ≈ 100 years (practically "all" for most datasets).
+ */
+const RANGE_DAYS: Record<RangeKey, number> = {
   "30d": 30,
   "90d": 90,
   "365d": 365,
-  all: null,
+  all: 36500,
 };
 
 const CURRENCIES = ["USD", "EUR", "KES", "GBP"] as const;
@@ -76,7 +91,12 @@ async function fetchJson<T>(url: string): Promise<T | null> {
     const json = await res.json().catch(() => null);
 
     if (!res.ok || (json as any)?.error) {
-      console.error("FX fetch error:", url, res.status, (json as any)?.error || json);
+      console.error(
+        "FX fetch error:",
+        url,
+        res.status,
+        (json as any)?.error || json
+      );
       return null;
     }
     return json as T;
@@ -87,12 +107,10 @@ async function fetchJson<T>(url: string): Promise<T | null> {
 }
 
 function format4(n: number) {
-  return n.toLocaleString("en-US", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
-}
-
-function formatPct(n: number) {
-  const sign = n >= 0 ? "+" : "";
-  return `${sign}${n.toFixed(2)}%`;
+  return n.toLocaleString("en-US", {
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
+  });
 }
 
 export default function FxMultiCurrencyMarketSnapshot() {
@@ -157,7 +175,9 @@ export default function FxMultiCurrencyMarketSnapshot() {
       setSummaryError(null);
 
       const s = await fetchJson<MarketSummary>(
-        `/api/v1/summary/market?base=SSP&quote=${encodeURIComponent(selectedCurrency)}`
+        `/api/v1/summary/market?base=SSP&quote=${encodeURIComponent(
+          selectedCurrency
+        )}`
       );
 
       if (cancelled) return;
@@ -198,10 +218,9 @@ export default function FxMultiCurrencyMarketSnapshot() {
 
       const results = await Promise.all(
         missing.map(async (cur) => {
-          const url =
-            days == null
-              ? `/api/v1/rates/history?base=SSP&quote=${encodeURIComponent(cur)}`
-              : `/api/v1/rates/history?base=SSP&quote=${encodeURIComponent(cur)}&days=${days}`;
+          const url = `/api/v1/rates/history?base=SSP&quote=${encodeURIComponent(
+            cur
+          )}&days=${days}`;
 
           const h = await fetchJson<HistoryResponse>(url);
           return { cur, points: h?.points ?? [] };
@@ -212,7 +231,9 @@ export default function FxMultiCurrencyMarketSnapshot() {
 
       setHistoryCache((prev) => {
         const next = { ...prev };
-        const forRange = { ...(next[range] ?? {}) } as Partial<Record<Currency, FxChartPoint[]>>;
+        const forRange = {
+          ...(next[range] ?? {}),
+        } as Partial<Record<Currency, FxChartPoint[]>>;
         for (const r of results) {
           forRange[r.cur] = r.points;
         }
@@ -252,7 +273,9 @@ export default function FxMultiCurrencyMarketSnapshot() {
       if (!pts) continue;
       for (const p of pts) set.add(p.date);
     }
-    return Array.from(set).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+    return Array.from(set).sort(
+      (a, b) => new Date(a).getTime() - new Date(b).getTime()
+    );
   }, [filteredSeries, activeCurrencies]);
 
   const datasets = useMemo(() => {
@@ -272,7 +295,9 @@ export default function FxMultiCurrencyMarketSnapshot() {
           label: `${cur}/SSP mid rate`,
           data: values,
           borderColor: color,
-          backgroundColor: isSelected ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.05)",
+          backgroundColor: isSelected
+            ? "rgba(255,255,255,0.10)"
+            : "rgba(255,255,255,0.05)",
           pointRadius: isSelected ? 3 : 1.6,
           pointHoverRadius: isSelected ? 5 : 3,
           pointBackgroundColor: color,
@@ -357,7 +382,8 @@ export default function FxMultiCurrencyMarketSnapshot() {
       if (t) {
         const tag = t.tagName;
         const editable = (t as any).isContentEditable;
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || editable) return;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || editable)
+          return;
       }
 
       if (
@@ -388,9 +414,15 @@ export default function FxMultiCurrencyMarketSnapshot() {
       return `Latest ${summary.quote}/SSP mid rate is ${format4(mid)}.`;
     }
 
-    const dirWord = Math.abs(change) < 0.01 ? "unchanged" : change > 0 ? "up" : "down";
-    const changePart = Math.abs(change) < 0.01 ? "" : `, ${dirWord} ${Math.abs(change).toFixed(2)}%`;
-    return `Latest ${summary.quote}/SSP mid rate is ${format4(mid)}${changePart} compared to the previous fixing.`;
+    const dirWord =
+      Math.abs(change) < 0.01 ? "unchanged" : change > 0 ? "up" : "down";
+    const changePart =
+      Math.abs(change) < 0.01
+        ? ""
+        : `, ${dirWord} ${Math.abs(change).toFixed(2)}%`;
+    return `Latest ${summary.quote}/SSP mid rate is ${format4(
+      mid
+    )}${changePart} compared to the previous fixing.`;
   }, [summary]);
 
   const stats = useMemo(() => {
@@ -513,9 +545,12 @@ export default function FxMultiCurrencyMarketSnapshot() {
             <p className="text-white/60 mb-0.5">Volatility</p>
             {stats.vol != null ? (
               <>
-                <p className="font-mono">{stats.vol.toFixed(2)}% avg daily move</p>
+                <p className="font-mono">
+                  {stats.vol.toFixed(2)}% avg daily move
+                </p>
                 <p className="text-[10px] text-white/50">
-                  Based on absolute day-to-day changes · {stats.volWindow}-day window
+                  Based on absolute day-to-day changes · {stats.volWindow}-day
+                  window
                 </p>
               </>
             ) : (
@@ -528,7 +563,8 @@ export default function FxMultiCurrencyMarketSnapshot() {
       {/* Instructions row */}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[10px] text-white/55">
         <span>
-          Scroll / pinch to zoom · <span className="font-semibold">Shift + drag</span> to pan
+          Scroll / pinch to zoom · <span className="font-semibold">Shift + drag</span>{" "}
+          to pan
         </span>
         <span className="flex items-center gap-1">
           Press{" "}
