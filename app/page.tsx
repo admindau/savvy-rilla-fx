@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import FxHistoryChart from "@/components/fx-history-chart";
+import FxMultiCurrencyMarketSnapshot from "@/components/fx-multicurrency-market-snapshot";
 import {
   buildInsightsFromSummary,
   type MarketSummary,
@@ -424,7 +425,7 @@ export default async function HomePage() {
               </div>
             </div>
 
-            {/* History chart */}
+            {/* Existing history chart (UNCHANGED) */}
             {historySeries.length > 0 && <FxHistoryChart series={historySeries} />}
 
             <p className="text-[0.7rem] text-zinc-500">
@@ -494,6 +495,24 @@ export default async function HomePage() {
               </>
             )}
           </div>
+        </section>
+
+        {/* NEW Multi-currency Market Snapshot (ADDED, does not replace anything) */}
+        <section className="space-y-3">
+          <div>
+            <p className="text-[0.7rem] uppercase tracking-[0.25em] text-zinc-500">
+              FX snapshot
+            </p>
+            <h2 className="text-xl font-semibold tracking-tight">
+              SSP vs key currencies (multi-currency)
+            </h2>
+            <p className="text-sm text-zinc-400 max-w-xl">
+              Switch currencies, change the window (30d / 90d / 365d / All), and
+              zoom/pan to inspect market structure.
+            </p>
+          </div>
+
+          <FxMultiCurrencyMarketSnapshot />
         </section>
 
         {/* FX Dashboard */}
