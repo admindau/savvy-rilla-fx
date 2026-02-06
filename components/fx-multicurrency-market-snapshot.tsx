@@ -28,7 +28,7 @@ type HistoryResponse = {
   base: string;
   quote: string;
   points: FxChartPoint[];
-  meta: { from: string; to: string; count: number };
+  meta: { from: string; to: string; count: number; truncated?: boolean };
 };
 
 type MarketSummary = {
@@ -61,12 +61,9 @@ const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
 ];
 
 /**
- * IMPORTANT:
- * We are NOT touching the API route.
- * So "All" must be implemented as "a very large days window"
- * instead of relying on "missing days" semantics.
- *
- * 36500 days ≈ 100 years (practically "all" for most datasets).
+ * Windowed ranges remain days-based.
+ * "All" is handled explicitly via `mode=all` (server paginates full history).
+ * We keep a numeric value for "all" only as a fallback / legacy safety.
  */
 const RANGE_DAYS: Record<RangeKey, number> = {
   "30d": 30,
@@ -166,6 +163,27 @@ export default function FxMultiCurrencyMarketSnapshot() {
     });
   }
 
+  function clearRangeCache(r: RangeKey) {
+    setHistoryCache((prev) => {
+      const next = { ...prev };
+      delete (next as any)[r];
+      return next;
+    });
+  }
+
+  function handleResetZoom() {
+    const chart = (chartRef.current as any)?.chart || chartRef.current;
+    if (chart && typeof chart.resetZoom === "function") chart.resetZoom();
+  }
+
+  // Reset zoom whenever the range changes so "All" always frames the full span.
+  useEffect(() => {
+    // defer to next tick so chart instance exists after range switch render
+    const t = setTimeout(() => handleResetZoom(), 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range]);
+
   // Summary for stats (Range/Trend/Volatility + headline)
   useEffect(() => {
     let cancelled = false;
@@ -207,7 +225,14 @@ export default function FxMultiCurrencyMarketSnapshot() {
       setHistoryError(null);
 
       const existingForRange = historyCache[range] ?? {};
-      const missing = activeCurrencies.filter((c) => !existingForRange?.[c]);
+
+      // Permanent behavior:
+      // - For "all", ALWAYS refetch (so backfills reflect immediately).
+      // - For windowed ranges, use cache normally.
+      const missing =
+        range === "all"
+          ? activeCurrencies
+          : activeCurrencies.filter((c) => !existingForRange?.[c]);
 
       if (missing.length === 0) {
         setHistoryLoading(false);
@@ -218,9 +243,14 @@ export default function FxMultiCurrencyMarketSnapshot() {
 
       const results = await Promise.all(
         missing.map(async (cur) => {
-          const url = `/api/v1/rates/history?base=SSP&quote=${encodeURIComponent(
-            cur
-          )}&days=${days}`;
+          const url =
+            range === "all"
+              ? `/api/v1/rates/history?base=SSP&quote=${encodeURIComponent(
+                  cur
+                )}&mode=all`
+              : `/api/v1/rates/history?base=SSP&quote=${encodeURIComponent(
+                  cur
+                )}&days=${days}`;
 
           const h = await fetchJson<HistoryResponse>(url);
           return { cur, points: h?.points ?? [] };
@@ -241,7 +271,6 @@ export default function FxMultiCurrencyMarketSnapshot() {
         return next;
       });
 
-      // If everything is empty, surface a gentle error
       const anyPoints = results.some((r) => (r.points?.length ?? 0) > 1);
       if (!anyPoints) {
         setHistoryError("Not enough data yet to display trends for this window.");
@@ -370,11 +399,6 @@ export default function FxMultiCurrencyMarketSnapshot() {
     []
   );
 
-  function handleResetZoom() {
-    const chart = (chartRef.current as any)?.chart || chartRef.current;
-    if (chart && typeof chart.resetZoom === "function") chart.resetZoom();
-  }
-
   // Keyboard shortcut: R to reset zoom
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -382,7 +406,12 @@ export default function FxMultiCurrencyMarketSnapshot() {
       if (t) {
         const tag = t.tagName;
         const editable = (t as any).isContentEditable;
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || editable)
+        if (
+          tag === "INPUT" ||
+          tag === "TEXTAREA" ||
+          tag === "SELECT" ||
+          editable
+        )
           return;
       }
 
@@ -400,6 +429,7 @@ export default function FxMultiCurrencyMarketSnapshot() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const headline = useMemo(() => {
@@ -488,7 +518,14 @@ export default function FxMultiCurrencyMarketSnapshot() {
               <button
                 key={opt.key}
                 type="button"
-                onClick={() => setRange(opt.key)}
+                onClick={() => {
+                  // Make "All" permanently accurate after backfills:
+                  // clear its cache and refetch.
+                  if (opt.key === "all") {
+                    clearRangeCache("all");
+                  }
+                  setRange(opt.key);
+                }}
                 className={`px-2 py-0.5 rounded-full text-[10px] border transition-colors ${
                   range === opt.key
                     ? "bg-white text-black border-white"
