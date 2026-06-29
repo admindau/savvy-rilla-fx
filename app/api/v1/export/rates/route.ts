@@ -1,33 +1,50 @@
 // app/api/v1/export/rates/route.ts
 import { NextRequest, NextResponse } from "next/server";
+import { buildApiHeaders } from "@/lib/api/headers";
+import { createApiContext } from "@/lib/api/request-id";
+import { apiError, apiJson } from "@/lib/api/response";
+import {
+  isCurrencyCode,
+  isIsoDate,
+  normalizeCurrencyCode,
+} from "@/lib/api/validation";
 import { supabaseServer } from "@/lib/supabase/server";
 
-const VERSION = "v1";
-
 export async function GET(req: NextRequest) {
+  const context = createApiContext(req);
   const supabase = supabaseServer;
   const url = new URL(req.url);
 
-  const baseCurrency = url.searchParams.get("base") ?? "SSP";
-  const quoteCurrency =
-    url.searchParams.get("quote")?.toUpperCase() ?? null;
+  const baseCurrency = normalizeCurrencyCode(url.searchParams.get("base"), "SSP");
+  const quoteCurrency = url.searchParams.get("quote")
+    ? normalizeCurrencyCode(url.searchParams.get("quote"), "")
+    : null;
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
   const format = (url.searchParams.get("format") ?? "csv").toLowerCase();
 
+  if (!isCurrencyCode(baseCurrency)) {
+    return apiError(context, 400, "INVALID_CURRENCY", "base must be a valid 3-letter currency code.");
+  }
+
+  if (quoteCurrency && !isCurrencyCode(quoteCurrency)) {
+    return apiError(context, 400, "INVALID_CURRENCY", "quote must be a valid 3-letter currency code.");
+  }
+
   if (!from || !to) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "MISSING_PARAMETER",
-          message: "from and to (YYYY-MM-DD) are required.",
-        },
-      },
-      {
-        status: 400,
-        headers: { "X-FX-API-Version": VERSION },
-      }
-    );
+    return apiError(context, 400, "MISSING_PARAMETER", "from and to (YYYY-MM-DD) are required.");
+  }
+
+  if (!isIsoDate(from) || !isIsoDate(to)) {
+    return apiError(context, 400, "INVALID_PARAMETER", "from and to must be valid dates in YYYY-MM-DD format.");
+  }
+
+  if (from > to) {
+    return apiError(context, 400, "INVALID_PARAMETER", "from must be before or equal to to.");
+  }
+
+  if (!format || !["csv", "json"].includes(format)) {
+    return apiError(context, 400, "INVALID_PARAMETER", "format must be either csv or json.");
   }
 
   let query = supabase
@@ -48,23 +65,14 @@ export async function GET(req: NextRequest) {
   const { data, error } = await query;
 
   if (error) {
-    return NextResponse.json(
-      { error: { code: "DB_ERROR", message: error.message } },
-      {
-        status: 500,
-        headers: { "X-FX-API-Version": VERSION },
-      }
-    );
+    return apiError(context, 500, "DB_ERROR", error.message);
   }
 
   if (format === "json") {
-    return NextResponse.json(
-      { data: data ?? [], meta: { base: baseCurrency, from, to } },
-      {
-        status: 200,
-        headers: { "X-FX-API-Version": VERSION },
-      }
-    );
+    return apiJson(context, {
+      data: data ?? [],
+      meta: { base: baseCurrency, quote: quoteCurrency, from, to },
+    });
   }
 
   const rows = data ?? [];
@@ -102,9 +110,8 @@ export async function GET(req: NextRequest) {
   return new NextResponse(csv, {
     status: 200,
     headers: {
-      "Content-Type": "text/csv; charset=utf-8",
+      ...buildApiHeaders(context, { contentType: "text/csv; charset=utf-8" }),
       "Content-Disposition": `attachment; filename="fx_rates_${baseCurrency}_${from}_to_${to}.csv"`,
-      "X-FX-API-Version": VERSION,
     },
   });
 }

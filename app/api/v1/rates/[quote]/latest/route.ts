@@ -1,20 +1,30 @@
 // app/api/v1/rates/[quote]/latest/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { createApiContext } from "@/lib/api/request-id";
+import { apiError, apiJson } from "@/lib/api/response";
+import { isCurrencyCode, normalizeCurrencyCode } from "@/lib/api/validation";
 import { supabaseServer } from "@/lib/supabase/server";
-
-const VERSION_HEADERS = { "X-FX-API-Version": "v1" };
 
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ quote: string }> }
+  contextParams: { params: Promise<{ quote: string }> }
 ) {
+  const context = createApiContext(req);
   const supabase = supabaseServer;
   const url = new URL(req.url);
-  const baseCurrency = url.searchParams.get("base") ?? "SSP";
+  const baseCurrency = normalizeCurrencyCode(url.searchParams.get("base"), "SSP");
 
-  // Next 16: params is a Promise
-  const { quote } = await context.params;
-  const quoteCurrency = quote.toUpperCase();
+  const { quote } = await contextParams.params;
+  const quoteCurrency = normalizeCurrencyCode(quote, "USD");
+
+  if (!isCurrencyCode(baseCurrency) || !isCurrencyCode(quoteCurrency)) {
+    return apiError(
+      context,
+      400,
+      "INVALID_CURRENCY",
+      "base and quote must be valid 3-letter currency codes."
+    );
+  }
 
   const { data: latestRow, error } = await supabase
     .from("fx_daily_rates")
@@ -28,21 +38,15 @@ export async function GET(
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json(
-      { error: { code: "DB_ERROR", message: error.message } },
-      { status: 500, headers: VERSION_HEADERS }
-    );
+    return apiError(context, 500, "DB_ERROR", error.message);
   }
 
   if (!latestRow) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "NO_DATA",
-          message: `No FX data found for pair ${baseCurrency}/${quoteCurrency}.`,
-        },
-      },
-      { status: 404, headers: VERSION_HEADERS }
+    return apiError(
+      context,
+      404,
+      "NO_DATA",
+      `No FX data found for pair ${baseCurrency}/${quoteCurrency}.`
     );
   }
 
@@ -64,18 +68,15 @@ export async function GET(
     changePct = ((latestMid - prevMid) / prevMid) * 100;
   }
 
-  return NextResponse.json(
-    {
-      pair: `${baseCurrency}/${quoteCurrency}`,
-      base: baseCurrency,
-      quote: quoteCurrency,
-      as_of_date: latestRow.as_of_date,
-      mid_rate: latestMid,
-      change_pct_vs_previous: changePct,
-      is_official: latestRow.is_official,
-      is_manual_override: latestRow.is_manual_override,
-      source_id: latestRow.source_id,
-    },
-    { status: 200, headers: VERSION_HEADERS }
-  );
+  return apiJson(context, {
+    pair: `${baseCurrency}/${quoteCurrency}`,
+    base: baseCurrency,
+    quote: quoteCurrency,
+    as_of_date: latestRow.as_of_date,
+    mid_rate: latestMid,
+    change_pct_vs_previous: changePct,
+    is_official: latestRow.is_official,
+    is_manual_override: latestRow.is_manual_override,
+    source_id: latestRow.source_id,
+  });
 }

@@ -1,8 +1,9 @@
 // app/api/v1/rates/latest/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { createApiContext } from "@/lib/api/request-id";
+import { apiError, apiJson } from "@/lib/api/response";
+import { isCurrencyCode, normalizeCurrencyCode } from "@/lib/api/validation";
 import { supabaseServer } from "@/lib/supabase/server";
-
-const VERSION_HEADERS = { "X-FX-API-Version": "v1" };
 
 type LiveRateRow = {
   as_of_date: string;
@@ -17,11 +18,20 @@ type LiveRateRow = {
 };
 
 export async function GET(req: NextRequest) {
+  const context = createApiContext(req);
   const supabase = supabaseServer;
   const url = new URL(req.url);
-  const baseCurrency = url.searchParams.get("base") ?? "SSP";
+  const baseCurrency = normalizeCurrencyCode(url.searchParams.get("base"), "SSP");
 
-  // 1) Find latest as_of_date in fx_daily_rates for this base
+  if (!isCurrencyCode(baseCurrency)) {
+    return apiError(
+      context,
+      400,
+      "INVALID_CURRENCY",
+      "base must be a valid 3-letter currency code."
+    );
+  }
+
   const { data: latestDateRow, error: latestDateError } = await supabase
     .from("fx_daily_rates")
     .select("as_of_date")
@@ -31,10 +41,7 @@ export async function GET(req: NextRequest) {
     .maybeSingle();
 
   if (latestDateError) {
-    return NextResponse.json(
-      { error: { code: "DB_ERROR", message: latestDateError.message } },
-      { status: 500, headers: VERSION_HEADERS }
-    );
+    return apiError(context, 500, "DB_ERROR", latestDateError.message);
   }
 
   let asOfDate = latestDateRow?.as_of_date as string | null;
@@ -51,16 +58,12 @@ export async function GET(req: NextRequest) {
       .order("quote_currency", { ascending: true });
 
     if (error) {
-      return NextResponse.json(
-        { error: { code: "DB_ERROR", message: error.message } },
-        { status: 500, headers: VERSION_HEADERS }
-      );
+      return apiError(context, 500, "DB_ERROR", error.message);
     }
 
     liveRates = (data ?? []) as LiveRateRow[];
   }
 
-  // 2) Fallback to fx_daily_rates_default if we have no liveRates
   if (!asOfDate || liveRates.length === 0) {
     const { data: defaultDateRow, error: defaultDateError } = await supabase
       .from("fx_daily_rates_default")
@@ -71,23 +74,17 @@ export async function GET(req: NextRequest) {
       .maybeSingle();
 
     if (defaultDateError) {
-      return NextResponse.json(
-        { error: { code: "DB_ERROR", message: defaultDateError.message } },
-        { status: 500, headers: VERSION_HEADERS }
-      );
+      return apiError(context, 500, "DB_ERROR", defaultDateError.message);
     }
 
     asOfDate = defaultDateRow?.as_of_date as string | null;
 
     if (!asOfDate) {
-      return NextResponse.json(
-        {
-          error: {
-            code: "NO_DATA",
-            message: `No FX data found for base currency ${baseCurrency}.`,
-          },
-        },
-        { status: 404, headers: VERSION_HEADERS }
+      return apiError(
+        context,
+        404,
+        "NO_DATA",
+        `No FX data found for base currency ${baseCurrency}.`
       );
     }
 
@@ -101,10 +98,7 @@ export async function GET(req: NextRequest) {
       .order("quote_currency", { ascending: true });
 
     if (error) {
-      return NextResponse.json(
-        { error: { code: "DB_ERROR", message: error.message } },
-        { status: 500, headers: VERSION_HEADERS }
-      );
+      return apiError(context, 500, "DB_ERROR", error.message);
     }
 
     const rates: Record<string, number> = {};
@@ -112,30 +106,23 @@ export async function GET(req: NextRequest) {
       rates[row.quote_currency] = Number(row.rate_mid);
     }
 
-    return NextResponse.json(
-      {
-        base: baseCurrency,
-        as_of_date: asOfDate,
-        source: "fx_daily_rates_default",
-        rates,
-      },
-      { status: 200, headers: VERSION_HEADERS }
-    );
+    return apiJson(context, {
+      base: baseCurrency,
+      as_of_date: asOfDate,
+      source: "fx_daily_rates_default",
+      rates,
+    });
   }
 
-  // If we’re here, we have live fx_daily_rates
   const rates: Record<string, number> = {};
   for (const row of liveRates) {
     rates[row.quote_currency] = Number(row.rate_mid);
   }
 
-  return NextResponse.json(
-    {
-      base: baseCurrency,
-      as_of_date: asOfDate,
-      source: "fx_daily_rates",
-      rates,
-    },
-    { status: 200, headers: VERSION_HEADERS }
-  );
+  return apiJson(context, {
+    base: baseCurrency,
+    as_of_date: asOfDate,
+    source: "fx_daily_rates",
+    rates,
+  });
 }

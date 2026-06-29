@@ -1,5 +1,8 @@
 // app/api/v1/summary/market/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { createApiContext } from "@/lib/api/request-id";
+import { apiError, apiJson } from "@/lib/api/response";
+import { isCurrencyCode, normalizeCurrencyCode } from "@/lib/api/validation";
 import {
   buildAiCommentaryFromSummary,
   buildMarketHealthFromSummary,
@@ -8,29 +11,25 @@ import {
 } from "@/lib/fx/insights";
 import { supabaseServer } from "@/lib/supabase/server";
 
-const VERSION_HEADERS = { "X-FX-API-Version": "v1" };
-
 type FxDailyRow = FxRatePoint;
 
-function badRequest(message: string) {
-  return NextResponse.json(
-    { error: { code: "BAD_REQUEST", message } },
-    { status: 400, headers: VERSION_HEADERS }
-  );
-}
-
 export async function GET(req: NextRequest) {
+  const context = createApiContext(req);
   const supabase = supabaseServer;
   const url = new URL(req.url);
 
-  const baseCurrency = (url.searchParams.get("base") ?? "SSP").toUpperCase();
-  const quoteCurrency = (url.searchParams.get("quote") ?? "USD").toUpperCase();
+  const baseCurrency = normalizeCurrencyCode(url.searchParams.get("base"), "SSP");
+  const quoteCurrency = normalizeCurrencyCode(url.searchParams.get("quote"), "USD");
 
-  if (!/^[A-Z]{3}$/.test(baseCurrency) || !/^[A-Z]{3}$/.test(quoteCurrency)) {
-    return badRequest("base and quote must be valid 3-letter currency codes.");
+  if (!isCurrencyCode(baseCurrency) || !isCurrencyCode(quoteCurrency)) {
+    return apiError(
+      context,
+      400,
+      "INVALID_CURRENCY",
+      "base and quote must be valid 3-letter currency codes."
+    );
   }
 
-  // 1) Latest fixing.
   const { data: latestRow, error: latestError } = await supabase
     .from("fx_daily_rates")
     .select("as_of_date, rate_mid")
@@ -41,27 +40,18 @@ export async function GET(req: NextRequest) {
     .maybeSingle();
 
   if (latestError) {
-    return NextResponse.json(
-      { error: { code: "DB_ERROR", message: latestError.message } },
-      { status: 500, headers: VERSION_HEADERS }
-    );
+    return apiError(context, 500, "DB_ERROR", latestError.message);
   }
 
   if (!latestRow) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "NO_DATA",
-          message: `No FX data for pair ${baseCurrency}/${quoteCurrency}.`,
-        },
-      },
-      { status: 404, headers: VERSION_HEADERS }
+    return apiError(
+      context,
+      404,
+      "NO_DATA",
+      `No FX data for pair ${baseCurrency}/${quoteCurrency}.`
     );
   }
 
-  // 2) Previous fixing. This is intentionally separate from the 30-day window
-  // because sparse market data can place the previous observation outside the
-  // calendar window.
   const { data: prevRow, error: prevError } = await supabase
     .from("fx_daily_rates")
     .select("as_of_date, rate_mid")
@@ -73,18 +63,12 @@ export async function GET(req: NextRequest) {
     .maybeSingle();
 
   if (prevError) {
-    return NextResponse.json(
-      { error: { code: "DB_ERROR", message: prevError.message } },
-      { status: 500, headers: VERSION_HEADERS }
-    );
+    return apiError(context, 500, "DB_ERROR", prevError.message);
   }
 
-  // 3) History window. FX-II-01A keeps this as a read-only derived analytics
-  // layer: no schema changes, no writes, and no impact on the shared Supabase
-  // database used by Gorilla Ledger and EAMU.
   const latestDateObj = new Date(latestRow.as_of_date);
   const from30Date = new Date(latestDateObj);
-  from30Date.setDate(from30Date.getDate() - 29); // inclusive 30-day window
+  from30Date.setDate(from30Date.getDate() - 29);
   const from30Str = from30Date.toISOString().slice(0, 10);
 
   const { data: historyRows, error: historyError } = await supabase
@@ -97,10 +81,7 @@ export async function GET(req: NextRequest) {
     .order("as_of_date", { ascending: true });
 
   if (historyError) {
-    return NextResponse.json(
-      { error: { code: "DB_ERROR", message: historyError.message } },
-      { status: 500, headers: VERSION_HEADERS }
-    );
+    return apiError(context, 500, "DB_ERROR", historyError.message);
   }
 
   try {
@@ -115,28 +96,19 @@ export async function GET(req: NextRequest) {
     const marketHealth = buildMarketHealthFromSummary(summary);
     const commentary = buildAiCommentaryFromSummary(summary, marketHealth);
 
-    return NextResponse.json(
-      {
-        ...summary,
-        marketHealth,
-        market_health: marketHealth,
-        commentary,
-      },
-      {
-        status: 200,
-        headers: VERSION_HEADERS,
-      }
-    );
+    return apiJson(context, {
+      ...summary,
+      marketHealth,
+      market_health: marketHealth,
+      commentary,
+    });
   } catch (error) {
     console.error("[FX] /summary/market intelligence error", error);
-    return NextResponse.json(
-      {
-        error: {
-          code: "BAD_DATA",
-          message: "Unable to calculate market intelligence from FX records.",
-        },
-      },
-      { status: 500, headers: VERSION_HEADERS }
+    return apiError(
+      context,
+      500,
+      "BAD_DATA",
+      "Unable to calculate market intelligence from FX records."
     );
   }
 }

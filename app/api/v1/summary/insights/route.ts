@@ -1,5 +1,8 @@
 // app/api/v1/summary/insights/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { createApiContext } from "@/lib/api/request-id";
+import { apiError, apiJson } from "@/lib/api/response";
+import { isCurrencyCode, normalizeCurrencyCode } from "@/lib/api/validation";
 import {
   buildAiCommentaryFromSummary,
   buildInsightsFromSummary,
@@ -19,10 +22,26 @@ function getApiBaseUrl() {
   return "http://localhost:3000";
 }
 
+function isMarketSummary(value: unknown): value is MarketSummary {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as Partial<MarketSummary>;
+  return Boolean(candidate.base && candidate.quote && candidate.as_of_date);
+}
+
 export async function GET(req: NextRequest) {
+  const context = createApiContext(req);
   const url = new URL(req.url);
-  const base = url.searchParams.get("base") ?? "SSP";
-  const quote = url.searchParams.get("quote") ?? "USD";
+  const base = normalizeCurrencyCode(url.searchParams.get("base"), "SSP");
+  const quote = normalizeCurrencyCode(url.searchParams.get("quote"), "USD");
+
+  if (!isCurrencyCode(base) || !isCurrencyCode(quote)) {
+    return apiError(
+      context,
+      400,
+      "INVALID_CURRENCY",
+      "base and quote must be valid 3-letter currency codes."
+    );
+  }
 
   const apiBase = getApiBaseUrl();
   const summaryUrl = `${apiBase}/api/v1/summary/market?base=${encodeURIComponent(
@@ -34,55 +53,51 @@ export async function GET(req: NextRequest) {
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      return NextResponse.json(
-        {
-          error: {
-            code: "SUMMARY_UPSTREAM_ERROR",
-            message: `Upstream /summary/market call failed with ${res.status}`,
-            details: text,
-          },
-        },
-        { status: 502, headers: { "X-FX-API-Version": "v1" } }
+      return apiError(
+        context,
+        502,
+        "SUMMARY_UPSTREAM_ERROR",
+        `Upstream /summary/market call failed with ${res.status}`,
+        text
       );
     }
 
-    const summary = (await res.json()) as MarketSummary;
+    const rawSummary = await res.json();
+    const summaryCandidate =
+      rawSummary && typeof rawSummary === "object" && "data" in rawSummary
+        ? (rawSummary as { data?: unknown }).data
+        : rawSummary;
+
+    if (!isMarketSummary(summaryCandidate)) {
+      return apiError(
+        context,
+        502,
+        "SUMMARY_UPSTREAM_ERROR",
+        "Upstream /summary/market returned an invalid summary payload."
+      );
+    }
+
+    const summary = summaryCandidate;
     const insights = buildInsightsFromSummary(summary);
     const marketHealth = buildMarketHealthFromSummary(summary);
     const commentary = buildAiCommentaryFromSummary(summary, marketHealth);
 
-    return NextResponse.json(
-      {
-        pair: `${summary.quote}/${summary.base}`,
-        base: summary.base,
-        quote: summary.quote,
-        as_of_date: summary.as_of_date,
-        insights,
-        commentary,
-        marketHealth,
-        market_health: marketHealth,
-        meta: {
-          version: "v1",
-          source: "/api/v1/summary/market",
-        },
+    return apiJson(context, {
+      pair: `${summary.quote}/${summary.base}`,
+      base: summary.base,
+      quote: summary.quote,
+      as_of_date: summary.as_of_date,
+      insights,
+      commentary,
+      marketHealth,
+      market_health: marketHealth,
+      meta: {
+        version: "v1",
+        source: "/api/v1/summary/market",
       },
-      {
-        status: 200,
-        headers: {
-          "X-FX-API-Version": "v1",
-        },
-      }
-    );
+    });
   } catch (error: unknown) {
     console.error("[FX] /summary/insights error", error);
-    return NextResponse.json(
-      {
-        error: {
-          code: "SUMMARY_INSIGHTS_ERROR",
-          message: "Failed to generate FX insights.",
-        },
-      },
-      { status: 500, headers: { "X-FX-API-Version": "v1" } }
-    );
+    return apiError(context, 500, "SUMMARY_INSIGHTS_ERROR", "Failed to generate FX insights.");
   }
 }

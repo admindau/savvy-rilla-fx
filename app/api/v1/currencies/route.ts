@@ -1,14 +1,15 @@
 // app/api/v1/currencies/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
+import { createApiContext } from "@/lib/api/request-id";
+import { apiError, apiJson } from "@/lib/api/response";
 import { supabaseServer } from "@/lib/supabase/server";
 
-const VERSION_HEADERS = { "X-FX-API-Version": "v1" };
-
 export async function GET(req: NextRequest) {
+  const context = createApiContext(req);
   const supabase = supabaseServer;
   const url = new URL(req.url);
 
-  const search = url.searchParams.get("search") ?? "";
+  const search = url.searchParams.get("search")?.trim() ?? "";
   const activeParam = url.searchParams.get("active");
   const activeOnly = activeParam === null ? true : activeParam === "true";
 
@@ -17,9 +18,7 @@ export async function GET(req: NextRequest) {
     .select("code, name, symbol, decimals, created_at", { count: "exact" });
 
   if (search) {
-    query = query.or(
-      `code.ilike.%${search}%,name.ilike.%${search}%`
-    );
+    query = query.or(`code.ilike.%${search}%,name.ilike.%${search}%`);
   }
 
   const { data, error, count } = await query.order("code", {
@@ -27,22 +26,11 @@ export async function GET(req: NextRequest) {
   });
 
   if (error) {
-    return NextResponse.json(
-      {
-        error: {
-          code: "DB_ERROR",
-          message: error.message,
-        },
-      },
-      { status: 500, headers: VERSION_HEADERS }
-    );
+    return apiError(context, 500, "DB_ERROR", error.message);
   }
 
-  return NextResponse.json(
-    {
-      data,
-      meta: { count: count ?? data?.length ?? 0, activeOnly },
-    },
-    { status: 200, headers: VERSION_HEADERS }
-  );
+  return apiJson(context, {
+    data: data ?? [],
+    meta: { count: count ?? data?.length ?? 0, activeOnly, search },
+  });
 }
