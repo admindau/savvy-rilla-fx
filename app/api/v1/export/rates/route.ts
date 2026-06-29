@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { buildApiHeaders } from "@/lib/api/headers";
 import { createApiContext } from "@/lib/api/request-id";
 import { apiError, apiJson } from "@/lib/api/response";
+import { apiOptions } from "@/lib/api/middleware";
+import { applyRateLimit } from "@/lib/api/rate-limit";
 import {
   isCurrencyCode,
   isIsoDate,
@@ -10,8 +12,13 @@ import {
 } from "@/lib/api/validation";
 import { supabaseServer } from "@/lib/supabase/server";
 
+
+export const OPTIONS = apiOptions;
+
 export async function GET(req: NextRequest) {
   const context = createApiContext(req);
+  const rateLimited = applyRateLimit(req, context);
+  if (rateLimited) return rateLimited;
   const supabase = supabaseServer;
   const url = new URL(req.url);
 

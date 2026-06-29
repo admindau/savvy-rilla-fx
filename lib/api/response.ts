@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildApiHeaders, getDurationMs, type ApiCacheMode } from "./headers";
+import { logApiRequest } from "./logger";
 import type { ApiContext } from "./request-id";
 
 export type ApiErrorCode =
@@ -10,6 +11,7 @@ export type ApiErrorCode =
   | "INVALID_PARAMETER"
   | "MISSING_PARAMETER"
   | "NO_DATA"
+  | "RATE_LIMITED"
   | "SUMMARY_INSIGHTS_ERROR"
   | "SUMMARY_UPSTREAM_ERROR";
 
@@ -23,6 +25,8 @@ export function apiJson<T extends Record<string, unknown>>(
   }
 ) {
   const status = options?.status ?? 200;
+  logApiRequest(context, status);
+
   return NextResponse.json(
     {
       success: true,
@@ -49,6 +53,8 @@ export function apiError(
   message: string,
   details?: unknown
 ) {
+  logApiRequest(context, status);
+
   return NextResponse.json(
     {
       success: false,
