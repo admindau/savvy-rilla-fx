@@ -1,567 +1,885 @@
 // app/docs/page.tsx
+"use client";
 
-export default function DocsPage() {
-  const baseUrl = "https://fx.savvyrilla.tech/api/v1";
+import { useMemo, useState } from "react";
+
+type CodeLanguage = "curl" | "javascript" | "python" | "php" | "dart";
+
+type Endpoint = {
+  method: "GET";
+  path: string;
+  title: string;
+  description: string;
+  cache: string;
+  rateLimit: string;
+  params: Array<{
+    name: string;
+    required: boolean;
+    description: string;
+    example: string;
+  }>;
+  sampleResponse: string;
+};
+
+const BASE_URL = "https://fx.savvyrilla.tech";
+const API_BASE = `${BASE_URL}/api/v1`;
+
+const endpoints: Endpoint[] = [
+  {
+    method: "GET",
+    path: "/rates/latest",
+    title: "Latest FX Rates",
+    description:
+      "Returns the latest available exchange rates for SSP against supported quote currencies.",
+    cache: "Public cache, short TTL",
+    rateLimit: "120 requests per minute per IP or API key",
+    params: [
+      {
+        name: "base",
+        required: false,
+        description: "Base currency. Defaults to SSP.",
+        example: "SSP",
+      },
+    ],
+    sampleResponse: `{
+  "success": true,
+  "requestId": "req_...",
+  "timestamp": "2026-06-29T12:00:00.000Z",
+  "version": "v1",
+  "durationMs": 12,
+  "data": {
+    "base": "SSP",
+    "asOfDate": "2026-06-29",
+    "rates": [
+      {
+        "quote": "USD",
+        "rate": 4685,
+        "source": "Savvy Rilla FX"
+      }
+    ]
+  }
+}`,
+  },
+  {
+    method: "GET",
+    path: "/rates/USD/latest",
+    title: "Latest Rate by Quote Currency",
+    description:
+      "Returns the latest rate for one quote currency, such as USD, KES, EUR, or GBP.",
+    cache: "Public cache, short TTL",
+    rateLimit: "120 requests per minute per IP or API key",
+    params: [
+      {
+        name: "base",
+        required: false,
+        description: "Base currency. Defaults to SSP.",
+        example: "SSP",
+      },
+    ],
+    sampleResponse: `{
+  "success": true,
+  "requestId": "req_...",
+  "timestamp": "2026-06-29T12:00:00.000Z",
+  "version": "v1",
+  "durationMs": 9,
+  "data": {
+    "base": "SSP",
+    "quote": "USD",
+    "rate": 4685,
+    "asOfDate": "2026-06-29"
+  }
+}`,
+  },
+  {
+    method: "GET",
+    path: "/rates/history",
+    title: "Historical Rates",
+    description:
+      "Returns historical FX observations for a currency pair over a date range.",
+    cache: "Public cache, medium TTL",
+    rateLimit: "120 requests per minute per IP or API key",
+    params: [
+      {
+        name: "base",
+        required: false,
+        description: "Base currency. Defaults to SSP.",
+        example: "SSP",
+      },
+      {
+        name: "quote",
+        required: false,
+        description: "Quote currency. Defaults to USD.",
+        example: "USD",
+      },
+      {
+        name: "from",
+        required: false,
+        description: "Start date in YYYY-MM-DD format.",
+        example: "2026-01-01",
+      },
+      {
+        name: "to",
+        required: false,
+        description: "End date in YYYY-MM-DD format.",
+        example: "2026-06-29",
+      },
+    ],
+    sampleResponse: `{
+  "success": true,
+  "requestId": "req_...",
+  "timestamp": "2026-06-29T12:00:00.000Z",
+  "version": "v1",
+  "durationMs": 18,
+  "data": {
+    "base": "SSP",
+    "quote": "USD",
+    "points": [
+      {
+        "date": "2026-06-29",
+        "rate": 4685
+      }
+    ]
+  }
+}`,
+  },
+  {
+    method: "GET",
+    path: "/rates/recent",
+    title: "Recent Rates",
+    description:
+      "Returns recent observations for quick charts, widgets, and lightweight integrations.",
+    cache: "Public cache, short TTL",
+    rateLimit: "120 requests per minute per IP or API key",
+    params: [
+      {
+        name: "base",
+        required: false,
+        description: "Base currency. Defaults to SSP.",
+        example: "SSP",
+      },
+      {
+        name: "quote",
+        required: false,
+        description: "Quote currency. Defaults to USD.",
+        example: "USD",
+      },
+      {
+        name: "limit",
+        required: false,
+        description: "Number of recent records to return.",
+        example: "30",
+      },
+    ],
+    sampleResponse: `{
+  "success": true,
+  "requestId": "req_...",
+  "timestamp": "2026-06-29T12:00:00.000Z",
+  "version": "v1",
+  "durationMs": 10,
+  "data": {
+    "base": "SSP",
+    "quote": "USD",
+    "limit": 30,
+    "points": []
+  }
+}`,
+  },
+  {
+    method: "GET",
+    path: "/summary/market",
+    title: "Market Summary",
+    description:
+      "Returns market movement, volatility, health score, and structured commentary for a currency pair.",
+    cache: "Public cache, short TTL",
+    rateLimit: "120 requests per minute per IP or API key",
+    params: [
+      {
+        name: "base",
+        required: false,
+        description: "Base currency. Defaults to SSP.",
+        example: "SSP",
+      },
+      {
+        name: "quote",
+        required: false,
+        description: "Quote currency. Defaults to USD.",
+        example: "USD",
+      },
+    ],
+    sampleResponse: `{
+  "success": true,
+  "requestId": "req_...",
+  "timestamp": "2026-06-29T12:00:00.000Z",
+  "version": "v1",
+  "durationMs": 16,
+  "data": {
+    "pair": "SSP/USD",
+    "marketHealth": {
+      "score": 84,
+      "status": "Stable",
+      "color": "green"
+    },
+    "commentary": {
+      "headline": "SSP market remains broadly stable"
+    }
+  }
+}`,
+  },
+  {
+    method: "GET",
+    path: "/summary/insights",
+    title: "AI Commentary Insights",
+    description:
+      "Returns richer market narrative and insight blocks derived from the latest FX summary.",
+    cache: "Public cache, short TTL",
+    rateLimit: "120 requests per minute per IP or API key",
+    params: [
+      {
+        name: "base",
+        required: false,
+        description: "Base currency. Defaults to SSP.",
+        example: "SSP",
+      },
+      {
+        name: "quote",
+        required: false,
+        description: "Quote currency. Defaults to USD.",
+        example: "USD",
+      },
+    ],
+    sampleResponse: `{
+  "success": true,
+  "requestId": "req_...",
+  "timestamp": "2026-06-29T12:00:00.000Z",
+  "version": "v1",
+  "durationMs": 20,
+  "data": {
+    "headline": "Market remains stable",
+    "summary": "The SSP traded within a narrow range against the USD.",
+    "signals": []
+  }
+}`,
+  },
+  {
+    method: "GET",
+    path: "/currencies",
+    title: "Supported Currencies",
+    description:
+      "Returns the supported currency universe exposed by the FX API.",
+    cache: "Public cache, long TTL",
+    rateLimit: "120 requests per minute per IP or API key",
+    params: [],
+    sampleResponse: `{
+  "success": true,
+  "requestId": "req_...",
+  "timestamp": "2026-06-29T12:00:00.000Z",
+  "version": "v1",
+  "durationMs": 5,
+  "data": {
+    "currencies": ["SSP", "USD", "KES", "EUR", "GBP"]
+  }
+}`,
+  },
+  {
+    method: "GET",
+    path: "/export/rates",
+    title: "Export Rates",
+    description:
+      "Exports rate data for research, reporting, dashboards, and external workflows.",
+    cache: "No store",
+    rateLimit: "120 requests per minute per IP or API key",
+    params: [
+      {
+        name: "format",
+        required: false,
+        description: "Export format. Supported values depend on the route implementation.",
+        example: "json",
+      },
+    ],
+    sampleResponse: `{
+  "success": true,
+  "requestId": "req_...",
+  "timestamp": "2026-06-29T12:00:00.000Z",
+  "version": "v1",
+  "durationMs": 25,
+  "data": {
+    "exported": true
+  }
+}`,
+  },
+];
+
+const errorCodes = [
+  {
+    code: "BAD_REQUEST",
+    status: "400",
+    description: "The request could not be processed.",
+  },
+  {
+    code: "INVALID_CURRENCY",
+    status: "400",
+    description: "A currency code was missing or malformed.",
+  },
+  {
+    code: "INVALID_PARAMETER",
+    status: "400",
+    description: "A query parameter was invalid.",
+  },
+  {
+    code: "MISSING_PARAMETER",
+    status: "400",
+    description: "A required query parameter was not provided.",
+  },
+  {
+    code: "NO_DATA",
+    status: "404",
+    description: "No FX data exists for the requested resource.",
+  },
+  {
+    code: "RATE_LIMITED",
+    status: "429",
+    description: "The rate limit was exceeded. Retry after the reset window.",
+  },
+  {
+    code: "DB_ERROR",
+    status: "500",
+    description: "The API could not complete a database operation.",
+  },
+];
+
+function buildQuery(params: Endpoint["params"]): string {
+  const entries = params
+    .filter((param) => param.example)
+    .map((param) => `${param.name}=${encodeURIComponent(param.example)}`);
+
+  return entries.length > 0 ? `?${entries.join("&")}` : "";
+}
+
+function buildUrl(endpoint: Endpoint): string {
+  return `${API_BASE}${endpoint.path}${buildQuery(endpoint.params)}`;
+}
+
+function buildSnippet(endpoint: Endpoint, language: CodeLanguage): string {
+  const url = buildUrl(endpoint);
+
+  switch (language) {
+    case "curl":
+      return `curl -X GET "${url}" \\
+  -H "Accept: application/json"`;
+    case "javascript":
+      return `const response = await fetch("${url}", {
+  headers: {
+    Accept: "application/json",
+  },
+});
+
+const data = await response.json();
+console.log(data);`;
+    case "python":
+      return `import requests
+
+response = requests.get(
+    "${url}",
+    headers={"Accept": "application/json"},
+    timeout=20,
+)
+
+print(response.json())`;
+    case "php":
+      return `<?php
+$response = file_get_contents("${url}");
+$data = json_decode($response, true);
+
+print_r($data);`;
+    case "dart":
+      return `import "dart:convert";
+import "package:http/http.dart" as http;
+
+final response = await http.get(
+  Uri.parse("${url}"),
+  headers: {"Accept": "application/json"},
+);
+
+final data = jsonDecode(response.body);
+print(data);`;
+    default:
+      return url;
+  }
+}
+
+function Pill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-xs font-medium text-zinc-300">
+      {children}
+    </span>
+  );
+}
+
+function SectionTitle({
+  eyebrow,
+  title,
+  description,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.3em] text-zinc-500">
+        {eyebrow}
+      </p>
+      <h2 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">
+        {title}
+      </h2>
+      <p className="max-w-3xl text-sm leading-6 text-zinc-400">{description}</p>
+    </div>
+  );
+}
+
+function CopyButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  }
 
   return (
-    <main className="min-h-screen bg-black text-zinc-100 px-4 py-10">
-      <div className="mx-auto max-w-4xl space-y-10">
-        {/* Header */}
-        <header className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
-            Savvy Rilla FX API
-          </p>
-          <h1 className="text-3xl font-semibold tracking-tight">
-            Public API Documentation (v1)
-          </h1>
-          <p className="text-sm text-zinc-400">
-            Read-only FX rates API for SSP and key global currencies. All
-            endpoints are versioned under <code className="bg-zinc-900 px-1 py-0.5 rounded text-[0.7rem]">/api/v1</code>.
-          </p>
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-zinc-200 transition hover:border-white/20 hover:bg-white/[0.1]"
+    >
+      {copied ? "Copied" : "Copy"}
+    </button>
+  );
+}
+
+function CodeBlock({ code }: { code: string }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-950">
+      <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+        <span className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">
+          Example
+        </span>
+        <CopyButton value={code} />
+      </div>
+      <pre className="overflow-x-auto p-4 text-xs leading-6 text-zinc-300">
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
+function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
+  const [language, setLanguage] = useState<CodeLanguage>("curl");
+
+  const snippet = useMemo(
+    () => buildSnippet(endpoint, language),
+    [endpoint, language],
+  );
+
+  return (
+    <article
+      id={endpoint.path.replaceAll("/", "-").replace(/^-/, "")}
+      className="rounded-3xl border border-white/10 bg-white/[0.035] p-5 shadow-2xl shadow-black/30 md:p-6"
+    >
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+              {endpoint.method}
+            </span>
+            <code className="rounded-full border border-white/10 bg-black px-3 py-1 text-xs text-zinc-300">
+              {endpoint.path}
+            </code>
+          </div>
+          <div>
+            <h3 className="text-xl font-semibold text-white">{endpoint.title}</h3>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">
+              {endpoint.description}
+            </p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Pill>{endpoint.cache}</Pill>
+          <Pill>{endpoint.rateLimit}</Pill>
+        </div>
+      </div>
+
+      {endpoint.params.length > 0 ? (
+        <div className="mt-6 overflow-hidden rounded-2xl border border-white/10">
+          <table className="w-full border-collapse text-left text-sm">
+            <thead className="bg-white/[0.04] text-xs uppercase tracking-[0.18em] text-zinc-500">
+              <tr>
+                <th className="px-4 py-3">Parameter</th>
+                <th className="px-4 py-3">Required</th>
+                <th className="px-4 py-3">Example</th>
+                <th className="px-4 py-3">Description</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/10 text-zinc-300">
+              {endpoint.params.map((param) => (
+                <tr key={param.name}>
+                  <td className="px-4 py-3 font-mono text-xs">{param.name}</td>
+                  <td className="px-4 py-3">{param.required ? "Yes" : "No"}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-zinc-400">
+                    {param.example}
+                  </td>
+                  <td className="px-4 py-3 text-zinc-400">{param.description}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="mt-6 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-zinc-400">
+          This endpoint does not require query parameters.
+        </p>
+      )}
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {(["curl", "javascript", "python", "php", "dart"] as CodeLanguage[]).map(
+              (item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setLanguage(item)}
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+                    language === item
+                      ? "bg-white text-black"
+                      : "border border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]"
+                  }`}
+                >
+                  {item}
+                </button>
+              ),
+            )}
+          </div>
+          <CodeBlock code={snippet} />
+        </div>
+
+        <CodeBlock code={endpoint.sampleResponse} />
+      </div>
+    </article>
+  );
+}
+
+export default function DocsPage() {
+  const [selectedEndpoint, setSelectedEndpoint] = useState(endpoints[0]);
+  const [selectedLanguage, setSelectedLanguage] = useState<CodeLanguage>("curl");
+
+  const selectedSnippet = useMemo(
+    () => buildSnippet(selectedEndpoint, selectedLanguage),
+    [selectedEndpoint, selectedLanguage],
+  );
+
+  return (
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#1f2937_0,#050505_36%,#000_100%)] text-zinc-100">
+      <div className="mx-auto max-w-7xl px-4 py-8 md:px-8 md:py-12">
+        <header className="overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.035] p-6 shadow-2xl shadow-black/40 md:p-10">
+          <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-3xl space-y-5">
+              <div className="flex flex-wrap gap-2">
+                <Pill>Savvy Rilla FX API</Pill>
+                <Pill>Version v1</Pill>
+                <Pill>Production Ready</Pill>
+              </div>
+              <div className="space-y-4">
+                <h1 className="text-4xl font-semibold tracking-tight text-white md:text-6xl">
+                  Developer Documentation
+                </h1>
+                <p className="max-w-2xl text-base leading-7 text-zinc-400 md:text-lg">
+                  Integrate reliable South Sudanese Pound FX data, market summaries,
+                  AI-style commentary, and currency intelligence into applications,
+                  dashboards, reports, and internal tools.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <a
+                  href="#quick-start"
+                  className="rounded-full bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-zinc-200"
+                >
+                  Quick start
+                </a>
+                <a
+                  href="#endpoints"
+                  className="rounded-full border border-white/10 bg-white/[0.05] px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.1]"
+                >
+                  View endpoints
+                </a>
+              </div>
+            </div>
+
+            <div className="grid min-w-full gap-3 sm:grid-cols-3 lg:min-w-[420px]">
+              <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+                  Base URL
+                </p>
+                <p className="mt-3 break-all font-mono text-xs text-zinc-300">
+                  {API_BASE}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">
+                  Status
+                </p>
+                <p className="mt-3 text-sm font-semibold text-emerald-100">
+                  Operational
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+                  Rate limit
+                </p>
+                <p className="mt-3 text-sm font-semibold text-zinc-200">
+                  120 req/min
+                </p>
+              </div>
+            </div>
+          </div>
         </header>
 
-        {/* Base URL & Versioning */}
-        <section className="space-y-4">
-          <h2 className="text-lg font-semibold">Base URL & Versioning</h2>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-sm space-y-3">
-            <div>
-              <p className="text-zinc-400 mb-1">Production base URL</p>
-              <code className="rounded bg-zinc-900 px-2 py-1 text-xs">
-                {baseUrl}
-              </code>
+        <nav className="mt-6 flex gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-black/40 p-2 text-sm text-zinc-300">
+          {[
+            ["Overview", "#overview"],
+            ["Quick Start", "#quick-start"],
+            ["Explorer", "#explorer"],
+            ["Endpoints", "#endpoints"],
+            ["Errors", "#errors"],
+            ["Headers", "#headers"],
+          ].map(([label, href]) => (
+            <a
+              key={href}
+              href={href}
+              className="shrink-0 rounded-full px-4 py-2 transition hover:bg-white/[0.08] hover:text-white"
+            >
+              {label}
+            </a>
+          ))}
+        </nav>
+
+        <section id="overview" className="mt-14 grid gap-4 md:grid-cols-4">
+          {[
+            ["Versioned", "All public routes live under /api/v1."],
+            ["Hardened", "Request IDs, security headers, and rate limits are enabled."],
+            ["Consistent", "Success and error responses follow one JSON contract."],
+            ["Developer-first", "Examples are provided for common integration stacks."],
+          ].map(([title, body]) => (
+            <div
+              key={title}
+              className="rounded-3xl border border-white/10 bg-white/[0.035] p-5"
+            >
+              <h3 className="font-semibold text-white">{title}</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-400">{body}</p>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div>
-                <p className="text-xs font-semibold text-zinc-500 uppercase mb-1">
-                  Version
+          ))}
+        </section>
+
+        <section id="quick-start" className="mt-16 space-y-6">
+          <SectionTitle
+            eyebrow="Quick Start"
+            title="Make your first request"
+            description="The public v1 endpoints are read-only. API keys are not required today, but the platform already accepts the x-api-key header for future commercial access tiers."
+          />
+
+          <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+            <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-6">
+              <h3 className="text-lg font-semibold text-white">Response contract</h3>
+              <p className="mt-3 text-sm leading-6 text-zinc-400">
+                Every hardened endpoint returns request metadata alongside the
+                business payload. This makes debugging, logging, and support easier.
+              </p>
+              <div className="mt-5 space-y-2 text-sm text-zinc-300">
+                <p>
+                  <span className="text-zinc-500">success:</span> Boolean request state
                 </p>
-                <p className="text-sm">v1 (path-based)</p>
-                <p className="text-xs text-zinc-500">
-                  All endpoints start with <code>/api/v1</code>. Breaking
-                  changes will go to <code>/api/v2</code>.
+                <p>
+                  <span className="text-zinc-500">requestId:</span> Correlation ID
+                </p>
+                <p>
+                  <span className="text-zinc-500">durationMs:</span> Server processing time
+                </p>
+                <p>
+                  <span className="text-zinc-500">version:</span> API version
                 </p>
               </div>
-              <div>
-                <p className="text-xs font-semibold text-zinc-500 uppercase mb-1">
-                  Response headers
+            </div>
+
+            <CodeBlock code={buildSnippet(endpoints[0], "curl")} />
+          </div>
+        </section>
+
+        <section id="explorer" className="mt-16 space-y-6">
+          <SectionTitle
+            eyebrow="API Explorer"
+            title="Build a request"
+            description="Select an endpoint and language to generate a copy-ready request. Live execution can be added later without changing the endpoint reference model."
+          />
+
+          <div className="grid gap-4 lg:grid-cols-[0.8fr_1.2fr]">
+            <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
+              <label className="text-xs font-semibold uppercase tracking-[0.25em] text-zinc-500">
+                Endpoint
+              </label>
+              <select
+                value={selectedEndpoint.path}
+                onChange={(event) => {
+                  const nextEndpoint =
+                    endpoints.find((item) => item.path === event.target.value) ??
+                    endpoints[0];
+                  setSelectedEndpoint(nextEndpoint);
+                }}
+                className="mt-3 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none"
+              >
+                {endpoints.map((endpoint) => (
+                  <option key={endpoint.path} value={endpoint.path}>
+                    {endpoint.method} {endpoint.path}
+                  </option>
+                ))}
+              </select>
+
+              <label className="mt-5 block text-xs font-semibold uppercase tracking-[0.25em] text-zinc-500">
+                Language
+              </label>
+              <select
+                value={selectedLanguage}
+                onChange={(event) =>
+                  setSelectedLanguage(event.target.value as CodeLanguage)
+                }
+                className="mt-3 w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none"
+              >
+                {(["curl", "javascript", "python", "php", "dart"] as CodeLanguage[]).map(
+                  (language) => (
+                    <option key={language} value={language}>
+                      {language}
+                    </option>
+                  ),
+                )}
+              </select>
+
+              <div className="mt-5 rounded-2xl border border-white/10 bg-black/50 p-4">
+                <p className="text-sm font-semibold text-white">
+                  {selectedEndpoint.title}
                 </p>
-                <p className="text-xs text-zinc-400">
-                  Every response includes{" "}
-                  <code className="bg-zinc-900 px-1 py-0.5 rounded">
-                    X-FX-API-Version: v1
-                  </code>
-                  .
+                <p className="mt-2 text-sm leading-6 text-zinc-400">
+                  {selectedEndpoint.description}
                 </p>
               </div>
             </div>
+
+            <CodeBlock code={selectedSnippet} />
           </div>
         </section>
 
-        {/* Auth */}
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Authentication</h2>
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-sm space-y-2">
-            <p>
-              <span className="font-medium text-zinc-100">
-                Read-only endpoints
-              </span>{" "}
-              documented on this page are currently{" "}
-              <span className="font-medium text-emerald-400">public</span> and
-              do not require authentication.
-            </p>
-            <p className="text-xs text-zinc-500">
-              Write/admin endpoints (used by internal dashboards) are protected
-              separately and are not part of the public v1 surface yet.
-            </p>
+        <section id="endpoints" className="mt-16 space-y-6">
+          <SectionTitle
+            eyebrow="Endpoint Reference"
+            title="Public v1 endpoints"
+            description="These endpoints are designed for dashboards, widgets, internal tools, research workflows, and developer integrations."
+          />
+
+          <div className="space-y-5">
+            {endpoints.map((endpoint) => (
+              <EndpointCard key={endpoint.path} endpoint={endpoint} />
+            ))}
           </div>
         </section>
 
-        {/* Quick Endpoint Overview */}
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Endpoint Overview</h2>
-          <div className="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950/60">
-            <table className="min-w-full text-left text-xs">
-              <thead className="border-b border-zinc-800 bg-zinc-950/80 text-zinc-400">
-                <tr>
-                  <th className="px-3 py-2 font-semibold">Method</th>
-                  <th className="px-3 py-2 font-semibold">Path</th>
-                  <th className="px-3 py-2 font-semibold">Description</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-800">
-                <tr>
-                  <td className="px-3 py-2 align-top text-emerald-400">GET</td>
-                  <td className="px-3 py-2 align-top">
-                    <code>/currencies</code>
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    List supported currencies.
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 align-top text-emerald-400">GET</td>
-                  <td className="px-3 py-2 align-top">
-                    <code>/rates/latest</code>
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    Latest mid rate for all quote currencies vs base (SSP
-                    default).
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 align-top text-emerald-400">GET</td>
-                  <td className="px-3 py-2 align-top">
-                    <code>/rates/&lt;quote&gt;/latest</code>
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    Latest snapshot for a single pair (e.g. SSP/USD).
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 align-top text-emerald-400">GET</td>
-                  <td className="px-3 py-2 align-top">
-                    <code>/rates/history</code>
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    Time series history for a given pair.
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 align-top text-emerald-400">GET</td>
-                  <td className="px-3 py-2 align-top">
-                    <code>/rates/recent</code>
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    Recent FX records (latest rows).
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 align-top text-emerald-400">GET</td>
-                  <td className="px-3 py-2 align-top">
-                    <code>/summary/market</code>
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    Compact summary for “Market Snapshot” (rate + change +
-                    range).
-                  </td>
-                </tr>
-                <tr>
-                  <td className="px-3 py-2 align-top text-emerald-400">GET</td>
-                  <td className="px-3 py-2 align-top">
-                    <code>/export/rates</code>
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    Export historical rates as JSON or CSV.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <section id="errors" className="mt-16 space-y-6">
+          <SectionTitle
+            eyebrow="Errors"
+            title="Standard error responses"
+            description="Errors use stable machine-readable codes and human-readable messages. The requestId should be included in support/debugging reports."
+          />
 
-        {/* /currencies */}
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">GET /currencies</h2>
-          <p className="text-sm text-zinc-400">
-            Returns the list of supported currencies (code, name, symbol,
-            decimals).
-          </p>
-
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs space-y-3">
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Request</p>
-              <code className="block rounded bg-zinc-900 px-2 py-1">
-                GET {baseUrl}/currencies
-              </code>
+          <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+            <div className="overflow-hidden rounded-3xl border border-white/10">
+              <table className="w-full border-collapse text-left text-sm">
+                <thead className="bg-white/[0.04] text-xs uppercase tracking-[0.18em] text-zinc-500">
+                  <tr>
+                    <th className="px-4 py-3">Code</th>
+                    <th className="px-4 py-3">HTTP</th>
+                    <th className="px-4 py-3">Description</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/10">
+                  {errorCodes.map((error) => (
+                    <tr key={error.code}>
+                      <td className="px-4 py-3 font-mono text-xs text-zinc-200">
+                        {error.code}
+                      </td>
+                      <td className="px-4 py-3 text-zinc-400">{error.status}</td>
+                      <td className="px-4 py-3 text-zinc-400">
+                        {error.description}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Query params</p>
-              <ul className="list-disc pl-5 space-y-1 text-zinc-400">
-                <li>
-                  <code>search</code> (optional) — filter by code or name.
-                </li>
-                <li>
-                  <code>active</code> (optional) — reserved for future use
-                  (e.g. <code>true</code> / <code>false</code>).
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Example curl</p>
-              <pre className="rounded bg-zinc-900 p-3 overflow-x-auto">
-{`curl "${baseUrl}/currencies"`}
-              </pre>
-            </div>
-
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Example response</p>
-              <pre className="rounded bg-zinc-900 p-3 overflow-x-auto">
-{`{
-  "data": [
-    { "code": "SSP", "name": "South Sudanese Pound", "symbol": "£", "decimals": 2 },
-    { "code": "USD", "name": "US Dollar", "symbol": "$", "decimals": 2 }
-  ],
-  "meta": {
-    "count": 2,
-    "activeOnly": true
-  }
-}`}
-              </pre>
-            </div>
-          </div>
-        </section>
-
-        {/* /rates/latest */}
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">GET /rates/latest</h2>
-          <p className="text-sm text-zinc-400">
-            Returns the latest mid rate for all quote currencies against a base
-            (default <code>SSP</code>). Falls back to{" "}
-            <code>fx_daily_rates_default</code> if there are no live rates.
-          </p>
-
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs space-y-3">
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Request</p>
-              <code className="block rounded bg-zinc-900 px-2 py-1">
-                GET {baseUrl}/rates/latest?base=SSP
-              </code>
-            </div>
-
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Query params</p>
-              <ul className="list-disc pl-5 space-y-1 text-zinc-400">
-                <li>
-                  <code>base</code> (optional) — base currency code, defaults to{" "}
-                  <code>SSP</code>.
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Example curl</p>
-              <pre className="rounded bg-zinc-900 p-3 overflow-x-auto">
-{`curl "${baseUrl}/rates/latest?base=SSP"`}
-              </pre>
-            </div>
-
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Example response</p>
-              <pre className="rounded bg-zinc-900 p-3 overflow-x-auto">
-{`{
-  "base": "SSP",
-  "as_of_date": "2025-11-20",
-  "source": "fx_daily_rates",
-  "rates": {
-    "USD": 4571.0054,
-    "EUR": 5020.11,
-    "KES": 29.12
-  }
-}`}
-              </pre>
-            </div>
-          </div>
-        </section>
-
-        {/* /rates/<quote>/latest */}
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">
-            GET /rates/&lt;quote&gt;/latest
-          </h2>
-          <p className="text-sm text-zinc-400">
-            Returns a snapshot for a single FX pair, e.g.{" "}
-            <code>SSP/USD</code>, including latest mid rate and % change vs
-            previous fixing.
-          </p>
-
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs space-y-3">
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Request</p>
-              <code className="block rounded bg-zinc-900 px-2 py-1">
-                GET {baseUrl}/rates/USD/latest?base=SSP
-              </code>
-            </div>
-
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Query params</p>
-              <ul className="list-disc pl-5 space-y-1 text-zinc-400">
-                <li>
-                  <code>base</code> (optional) — base currency, defaults to{" "}
-                  <code>SSP</code>.
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Example curl</p>
-              <pre className="rounded bg-zinc-900 p-3 overflow-x-auto">
-{`curl "${baseUrl}/rates/USD/latest?base=SSP"`}
-              </pre>
-            </div>
-
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Example response</p>
-              <pre className="rounded bg-zinc-900 p-3 overflow-x-auto">
-{`{
-  "pair": "SSP/USD",
-  "base": "SSP",
-  "quote": "USD",
-  "as_of_date": "2025-11-20",
-  "mid_rate": 4571.0054,
-  "change_pct_vs_previous": 0.2,
-  "is_official": true,
-  "is_manual_override": false,
-  "source_id": 1
-}`}
-              </pre>
-            </div>
-          </div>
-        </section>
-
-        {/* /rates/history */}
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">GET /rates/history</h2>
-          <p className="text-sm text-zinc-400">
-            Returns time series data for a given pair. You can request a rolling
-            window using <code>days</code> or pass explicit{" "}
-            <code>from</code>/<code>to</code> dates.
-          </p>
-
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs space-y-3">
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Request</p>
-              <code className="block rounded bg-zinc-900 px-2 py-1">
-                GET {baseUrl}
-                /rates/history?base=SSP&amp;quote=USD&amp;days=30
-              </code>
-            </div>
-
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Query params</p>
-              <ul className="list-disc pl-5 space-y-1 text-zinc-400">
-                <li>
-                  <code>base</code> (optional) — defaults to <code>SSP</code>.
-                </li>
-                <li>
-                  <code>quote</code> (optional) — defaults to{" "}
-                  <code>USD</code>.
-                </li>
-                <li>
-                  <code>days</code> (optional) — mutually exclusive with{" "}
-                  <code>from</code>/<code>to</code>. Positive integer (e.g.{" "}
-                  <code>30</code>, <code>90</code>, <code>365</code>).
-                </li>
-                <li>
-                  <code>from</code>, <code>to</code> (optional) — ISO dates
-                  <code>YYYY-MM-DD</code>.
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Example curl</p>
-              <pre className="rounded bg-zinc-900 p-3 overflow-x-auto">
-{`curl "${baseUrl}/rates/history?base=SSP&quote=USD&days=30"`}
-              </pre>
-            </div>
-
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Example response</p>
-              <pre className="rounded bg-zinc-900 p-3 overflow-x-auto">
-{`{
-  "pair": "SSP/USD",
-  "base": "SSP",
-  "quote": "USD",
-  "points": [
-    { "date": "2025-10-22", "mid": 4560.22 },
-    { "date": "2025-10-23", "mid": 4563.80 }
-  ],
-  "meta": {
-    "from": "2025-10-22",
-    "to": "2025-11-20",
-    "count": 30
-  }
-}`}
-              </pre>
-            </div>
-          </div>
-        </section>
-
-        {/* /rates/recent */}
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">GET /rates/recent</h2>
-          <p className="text-sm text-zinc-400">
-            Returns a list of the most recent FX rows, optionally filtered by
-            quote currency.
-          </p>
-
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs space-y-3">
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Request</p>
-              <code className="block rounded bg-zinc-900 px-2 py-1">
-                GET {baseUrl}
-                /rates/recent?base=SSP&amp;quote=USD&amp;limit=10
-              </code>
-            </div>
-
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Query params</p>
-              <ul className="list-disc pl-5 space-y-1 text-zinc-400">
-                <li>
-                  <code>base</code> (optional) — defaults to{" "}
-                  <code>SSP</code>.
-                </li>
-                <li>
-                  <code>quote</code> (optional) — filter by quote currency code.
-                </li>
-                <li>
-                  <code>limit</code> (optional) — max rows (1–100, default{" "}
-                  <code>20</code>).
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Example curl</p>
-              <pre className="rounded bg-zinc-900 p-3 overflow-x-auto">
-{`curl "${baseUrl}/rates/recent?base=SSP&quote=USD&limit=10"`}
-              </pre>
-            </div>
-          </div>
-        </section>
-
-        {/* /summary/market */}
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">GET /summary/market</h2>
-          <p className="text-sm text-zinc-400">
-            Returns a compact snapshot for a single pair, suitable for “Market
-            Snapshot” UI cards.
-          </p>
-
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs space-y-3">
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Request</p>
-              <code className="block rounded bg-zinc-900 px-2 py-1">
-                GET {baseUrl}
-                /summary/market?base=SSP&amp;quote=USD
-              </code>
-            </div>
-
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Query params</p>
-              <ul className="list-disc pl-5 space-y-1 text-zinc-400">
-                <li>
-                  <code>base</code> (optional) — defaults to{" "}
-                  <code>SSP</code>.
-                </li>
-                <li>
-                  <code>quote</code> (optional) — defaults to{" "}
-                  <code>USD</code>.
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Example response</p>
-              <pre className="rounded bg-zinc-900 p-3 overflow-x-auto">
-{`{
-  "base": "SSP",
-  "quote": "USD",
-  "as_of_date": "2025-11-20",
-  "mid_rate": 4571.0054,
-  "change_pct_vs_previous": 0.2,
-  "range": {
-    "window_days": 7,
-    "high": 4583.58,
-    "low": 4562.03
-  },
-  "trend": {
-    "window_days": 3,
-    "label": "Range-Bound"
-  },
-  "volatility": {
-    "window_days": 30,
-    "avg_daily_move_pct": null
-  }
-}`}
-              </pre>
-            </div>
-          </div>
-        </section>
-
-        {/* /export/rates */}
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">GET /export/rates</h2>
-          <p className="text-sm text-zinc-400">
-            Exports historical FX data for a time period as JSON or CSV. CSV is
-            ideal for spreadsheets and external analysis.
-          </p>
-
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-xs space-y-3">
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Request</p>
-              <code className="block rounded bg-zinc-900 px-2 py-1">
-                GET {baseUrl}
-                /export/rates?base=SSP&amp;quote=USD&amp;from=2025-01-01&amp;to=2025-11-20&amp;format=csv
-              </code>
-            </div>
-
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Query params</p>
-              <ul className="list-disc pl-5 space-y-1 text-zinc-400">
-                <li>
-                  <code>base</code> (optional) — defaults to{" "}
-                  <code>SSP</code>.
-                </li>
-                <li>
-                  <code>quote</code> (optional) — filter by quote currency.
-                </li>
-                <li>
-                  <code>from</code>, <code>to</code> (required) — ISO dates{" "}
-                  <code>YYYY-MM-DD</code>.
-                </li>
-                <li>
-                  <code>format</code> (optional) — <code>csv</code> (default) or{" "}
-                  <code>json</code>.
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <p className="font-medium text-zinc-200 mb-1">Example curl</p>
-              <pre className="rounded bg-zinc-900 p-3 overflow-x-auto">
-{`curl "${baseUrl}/export/rates?base=SSP&quote=USD&from=2025-01-01&to=2025-11-20&format=csv" -o fx_rates_usd_ssp.csv`}
-              </pre>
-            </div>
-          </div>
-        </section>
-
-        {/* Errors */}
-        <section className="space-y-3">
-          <h2 className="text-lg font-semibold">Error format</h2>
-          <p className="text-sm text-zinc-400">
-            Errors are returned with a consistent JSON structure:
-          </p>
-          <pre className="rounded bg-zinc-900 p-3 text-xs overflow-x-auto">
-{`{
+            <CodeBlock
+              code={`{
+  "success": false,
+  "requestId": "req_...",
+  "timestamp": "2026-06-29T12:00:00.000Z",
+  "version": "v1",
+  "durationMs": 3,
   "error": {
-    "code": "INVALID_PARAMETER",
-    "message": "days must be a positive integer."
+    "code": "RATE_LIMITED",
+    "message": "Too many requests. Please retry after the reset window.",
+    "details": {
+      "limit": 120,
+      "remaining": 0,
+      "resetSeconds": 60
+    }
   }
 }`}
-          </pre>
-          <p className="text-xs text-zinc-500">
-            Common codes include <code>INVALID_PARAMETER</code>,{" "}
-            <code>MISSING_PARAMETER</code>, <code>NO_DATA</code>, and{" "}
-            <code>DB_ERROR</code>.
-          </p>
+            />
+          </div>
         </section>
 
-        {/* Footer */}
-        <footer className="pt-4 border-t border-zinc-900 text-xs text-zinc-500">
-          Savvy Rilla FX API v1 · Powered by Savvy Gorilla Technologies™
+        <section id="headers" className="mt-16 space-y-6">
+          <SectionTitle
+            eyebrow="Headers"
+            title="Operational headers"
+            description="The API returns headers that help clients cache responses, identify request traces, and respect rate limits."
+          />
+
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {[
+              ["X-Request-ID", "Unique request correlation identifier."],
+              ["X-API-Version", "Current API version."],
+              ["X-Response-Time", "Server processing duration."],
+              ["X-RateLimit-Limit", "Maximum requests in the active window."],
+              ["X-RateLimit-Remaining", "Requests remaining in the active window."],
+              ["X-RateLimit-Reset", "Unix timestamp for the rate-limit reset."],
+            ].map(([header, description]) => (
+              <div
+                key={header}
+                className="rounded-3xl border border-white/10 bg-white/[0.035] p-5"
+              >
+                <code className="text-sm text-white">{header}</code>
+                <p className="mt-2 text-sm leading-6 text-zinc-400">
+                  {description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <footer className="mt-16 rounded-3xl border border-white/10 bg-white/[0.035] p-6 text-sm text-zinc-400">
+          <p>
+            Savvy Rilla FX API is part of the Savvy Rilla platform ecosystem.
+            This documentation covers public v1 endpoints and is designed to
+            evolve toward API keys, usage analytics, client dashboards, and a
+            full developer portal.
+          </p>
         </footer>
       </div>
     </main>
