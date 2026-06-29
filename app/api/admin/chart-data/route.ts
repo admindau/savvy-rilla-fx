@@ -5,6 +5,10 @@ import { isAdminAuthenticated } from "@/lib/admin/auth";
 
 export const dynamic = "force-dynamic";
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 type FxDailyRow = {
   as_of_date: string;
   rate_mid: number | string | null;
@@ -102,12 +106,12 @@ export async function GET(request: Request) {
       },
       { status: 200 }
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Unexpected error loading FX chart data:", err);
     return NextResponse.json(
       {
         error: "Unexpected error while loading FX chart data",
-        details: err?.message ?? String(err),
+        details: getErrorMessage(err, String(err)),
       },
       { status: 500 }
     );

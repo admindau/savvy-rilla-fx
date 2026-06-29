@@ -3,6 +3,10 @@
 
 import { FormEvent, useState } from "react";
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 type Props = {
   availableQuotes: string[];
 };
@@ -46,8 +50,8 @@ export function ManualRateForm({ availableQuotes }: Props) {
         setStatus("FX rate saved successfully.");
         setRateMid("");
       }
-    } catch (err: any) {
-      setError(err?.message ?? "Unexpected error");
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, "Unexpected error"));
     } finally {
       setIsSubmitting(false);
     }

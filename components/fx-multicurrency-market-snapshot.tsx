@@ -9,6 +9,9 @@ import {
   CategoryScale,
   Tooltip,
   Legend,
+  type ChartData,
+  type ChartOptions,
+  type TooltipItem,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 
@@ -22,6 +25,26 @@ ChartJS.register(
 );
 
 type FxChartPoint = { date: string; mid: number };
+
+type ApiErrorResponse = { error?: unknown };
+
+type LineChartInstance = ChartJS<"line", (number | null)[], string>;
+
+type ResettableChart = {
+  resetZoom?: () => void;
+  chart?: ResettableChart;
+};
+
+function hasApiError(value: unknown): value is ApiErrorResponse {
+  return typeof value === "object" && value !== null && "error" in value;
+}
+
+function getResettableChart(value: unknown): ResettableChart | null {
+  if (typeof value !== "object" || value === null) return null;
+  const candidate = value as ResettableChart;
+  return candidate.chart ?? candidate;
+}
+
 
 type HistoryResponse = {
   pair: string;
@@ -87,12 +110,12 @@ async function fetchJson<T>(url: string): Promise<T | null> {
     const res = await fetch(url, { cache: "no-store" });
     const json = await res.json().catch(() => null);
 
-    if (!res.ok || (json as any)?.error) {
+    if (!res.ok || hasApiError(json)) {
       console.error(
         "FX fetch error:",
         url,
         res.status,
-        (json as any)?.error || json
+        hasApiError(json) ? json.error : json
       );
       return null;
     }
@@ -123,12 +146,17 @@ export default function FxMultiCurrencyMarketSnapshot() {
   const [historyCache, setHistoryCache] = useState<
     Partial<Record<RangeKey, Partial<Record<Currency, FxChartPoint[]>>>>
   >({});
+  const historyCacheRef = useRef(historyCache);
+
+  useEffect(() => {
+    historyCacheRef.current = historyCache;
+  }, [historyCache]);
 
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
   const [zoomReady, setZoomReady] = useState(false);
-  const chartRef = useRef<any>(null);
+  const chartRef = useRef<LineChartInstance | null>(null);
 
   // Load zoom plugin once
   useEffect(() => {
@@ -166,13 +194,13 @@ export default function FxMultiCurrencyMarketSnapshot() {
   function clearRangeCache(r: RangeKey) {
     setHistoryCache((prev) => {
       const next = { ...prev };
-      delete (next as any)[r];
+      delete next[r];
       return next;
     });
   }
 
   function handleResetZoom() {
-    const chart = (chartRef.current as any)?.chart || chartRef.current;
+    const chart = getResettableChart(chartRef.current);
     if (chart && typeof chart.resetZoom === "function") chart.resetZoom();
   }
 
@@ -181,7 +209,6 @@ export default function FxMultiCurrencyMarketSnapshot() {
     // defer to next tick so chart instance exists after range switch render
     const t = setTimeout(() => handleResetZoom(), 0);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range]);
 
   // Summary for stats (Range/Trend/Volatility + headline)
@@ -224,7 +251,7 @@ export default function FxMultiCurrencyMarketSnapshot() {
       setHistoryLoading(true);
       setHistoryError(null);
 
-      const existingForRange = historyCache[range] ?? {};
+      const existingForRange = historyCacheRef.current[range] ?? {};
 
       // Permanent behavior:
       // - For "all", ALWAYS refetch (so backfills reflect immediately).
@@ -282,7 +309,6 @@ export default function FxMultiCurrencyMarketSnapshot() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range, activeCurrencies]);
 
   const filteredSeries = useMemo(() => {
@@ -338,9 +364,12 @@ export default function FxMultiCurrencyMarketSnapshot() {
       });
   }, [activeCurrencies, filteredSeries, labels, selectedCurrency]);
 
-  const data = useMemo(() => ({ labels, datasets }), [labels, datasets]);
+  const data: ChartData<"line", (number | null)[], string> = useMemo(
+    () => ({ labels, datasets }),
+    [labels, datasets]
+  );
 
-  const options: any = useMemo(
+  const options: ChartOptions<"line"> = useMemo(
     () => ({
       responsive: true,
       maintainAspectRatio: false,
@@ -373,7 +402,7 @@ export default function FxMultiCurrencyMarketSnapshot() {
           titleColor: "#ffffff",
           bodyColor: "#f5f5f5",
           callbacks: {
-            label: (ctx: any) => {
+            label: (ctx: TooltipItem<"line">) => {
               const v = ctx.parsed?.y;
               if (typeof v === "number") return ` ${format4(v)} SSP`;
               return ` ${v ?? "—"} SSP`;
@@ -405,7 +434,7 @@ export default function FxMultiCurrencyMarketSnapshot() {
       const t = e.target as HTMLElement | null;
       if (t) {
         const tag = t.tagName;
-        const editable = (t as any).isContentEditable;
+        const editable = t.isContentEditable;
         if (
           tag === "INPUT" ||
           tag === "TEXTAREA" ||
@@ -429,7 +458,6 @@ export default function FxMultiCurrencyMarketSnapshot() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const headline = useMemo(() => {

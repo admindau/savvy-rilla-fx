@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   // Fetch ALL SSP→USD points we have so far
-  const { data, error } = await supabaseServer
+  const { data } = await supabaseServer
     .from("fx_daily_rates_default")
     .select("as_of_date, rate_mid")
     .eq("base_currency", "SSP")

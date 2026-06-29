@@ -66,7 +66,7 @@ export function SSPUsdChart({ data }: Props) {
                   fontSize: 11,
                 }}
                 labelStyle={{ color: "#e4e4e7" }}
-                formatter={(value: any) => [
+                formatter={(value: number | string) => [
                   Number(value).toLocaleString(),
                   "SSP per 1 USD",
                 ]}

@@ -4,6 +4,18 @@ import { supabaseServer } from "@/lib/supabase/server";
 
 const VERSION_HEADERS = { "X-FX-API-Version": "v1" };
 
+type LiveRateRow = {
+  as_of_date: string;
+  base_currency: string;
+  quote_currency: string;
+  rate_mid: number | string | null;
+  is_official: boolean | null;
+  is_manual_override: boolean | null;
+  source_id?: number | string | null;
+  source_code?: string | null;
+  source_label?: string | null;
+};
+
 export async function GET(req: NextRequest) {
   const supabase = supabaseServer;
   const url = new URL(req.url);
@@ -27,7 +39,7 @@ export async function GET(req: NextRequest) {
 
   let asOfDate = latestDateRow?.as_of_date as string | null;
 
-  let liveRates: any[] = [];
+  let liveRates: LiveRateRow[] = [];
   if (asOfDate) {
     const { data, error } = await supabase
       .from("fx_daily_rates")
@@ -45,7 +57,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    liveRates = data ?? [];
+    liveRates = (data ?? []) as LiveRateRow[];
   }
 
   // 2) Fallback to fx_daily_rates_default if we have no liveRates

@@ -10,6 +10,9 @@ import {
   Tooltip,
   Filler,
   Legend,
+  type ChartData,
+  type ChartOptions,
+  type TooltipItem,
 } from "chart.js";
 import { Line } from "react-chartjs-2";
 
@@ -24,6 +27,24 @@ ChartJS.register(
 );
 
 type SaveState = "idle" | "saving" | "success" | "error";
+
+type LineChartInstance = ChartJS<"line", (number | null)[], string>;
+
+type ResettableChart = {
+  resetZoom?: () => void;
+  chart?: ResettableChart;
+};
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+function getResettableChart(value: unknown): ResettableChart | null {
+  if (typeof value !== "object" || value === null) return null;
+  const candidate = value as ResettableChart;
+  return candidate.chart ?? candidate;
+}
+
 
 type FxRate = {
   id?: number;
@@ -128,10 +149,10 @@ function AiInsightsCoach() {
           setSummary(json as MarketSummary);
           setLoading(false);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!cancelled) {
           setError(
-            err?.message || "Unexpected error while loading market summary."
+            getErrorMessage(err, "Unexpected error while loading market summary.")
           );
           setSummary(null);
           setLoading(false);
@@ -423,7 +444,7 @@ function FxTrendChart() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [series, setSeries] = useState<Record<string, FxChartPoint[]>>({});
-  const chartRef = useRef<any>(null);
+  const chartRef = useRef<LineChartInstance | null>(null);
 
   const [zoomReady, setZoomReady] = useState(false);
 
@@ -482,7 +503,7 @@ function FxTrendChart() {
             } else {
               nextSeries[cur] = json.points ?? [];
             }
-          } catch (err: any) {
+          } catch (err: unknown) {
             console.error(
               `Unexpected error loading FX chart data for ${cur}:`,
               err
@@ -495,13 +516,13 @@ function FxTrendChart() {
           setSeries(nextSeries);
           setLoading(false);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         if (!cancelled) {
           setError(
-            err?.message || "Unexpected error while loading FX chart data."
+            getErrorMessage(err, "Unexpected error while loading FX chart data.")
           );
-          setSeries({}),
-            setLoading(false);
+          setSeries({});
+          setLoading(false);
         }
       }
     }
@@ -634,7 +655,7 @@ function FxTrendChart() {
   })();
 
   function handleResetZoom() {
-    const chart = (chartRef.current as any)?.chart || chartRef.current;
+    const chart = getResettableChart(chartRef.current);
     if (chart && typeof chart.resetZoom === "function") {
       chart.resetZoom();
     }
@@ -646,7 +667,7 @@ function FxTrendChart() {
       const target = e.target as HTMLElement | null;
       if (target) {
         const tag = target.tagName;
-        const isEditable = (target as any).isContentEditable;
+        const isEditable = target.isContentEditable;
         if (
           tag === "INPUT" ||
           tag === "TEXTAREA" ||
@@ -730,9 +751,9 @@ function FxTrendChart() {
       };
     });
 
-  const data = { labels, datasets };
+  const data: ChartData<"line", (number | null)[], string> = { labels, datasets };
 
-  const options: any = {
+  const options: ChartOptions<"line"> = {
     responsive: true,
     maintainAspectRatio: false,
     scales: {
@@ -773,7 +794,7 @@ function FxTrendChart() {
         titleColor: "#ffffff",
         bodyColor: "#f5f5f5",
         callbacks: {
-          label: (context: any) => {
+          label: (context: TooltipItem<"line">) => {
             const v = context.parsed.y;
             if (typeof v === "number") {
               return ` ${v.toLocaleString("en-US", {
@@ -980,10 +1001,10 @@ export default function AdminPage() {
       }
       setRates(json?.data ?? []);
       setRatesState("idle");
-    } catch (err: any) {
+    } catch (err: unknown) {
       setRatesState("error");
       setRatesError(
-        err?.message || "Unexpected error while loading FX rates."
+        getErrorMessage(err, "Unexpected error while loading FX rates.")
       );
       setRates([]);
     }
@@ -1077,10 +1098,10 @@ export default function AdminPage() {
       setEditingLabel(null);
 
       fetchRecentRates();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setSaveState("error");
       setMessage(
-        err?.message
+        err instanceof Error
           ? `Unexpected error: ${err.message}`
           : "Unexpected error while saving FX rate."
       );
@@ -1130,8 +1151,8 @@ export default function AdminPage() {
       }
 
       fetchRecentRates();
-    } catch (err: any) {
-      alert(err?.message || "Unexpected error while deleting FX rate.");
+    } catch (err: unknown) {
+      alert(getErrorMessage(err, "Unexpected error while deleting FX rate."));
     }
   }
 

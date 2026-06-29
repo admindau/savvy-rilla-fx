@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { isAdminAuthenticated } from "@/lib/admin/auth";
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export async function POST(req: NextRequest) {
   const ok = await isAdminAuthenticated();
   if (!ok) {
@@ -87,11 +91,11 @@ export async function POST(req: NextRequest) {
       },
       { status: 200 }
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
       {
         error: "Unexpected error while saving FX rate",
-        details: err?.message ?? String(err),
+        details: getErrorMessage(err, String(err)),
       },
       { status: 500 }
     );

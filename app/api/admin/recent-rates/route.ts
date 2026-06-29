@@ -5,6 +5,21 @@ import { isAdminAuthenticated } from "@/lib/admin/auth";
 
 export const dynamic = "force-dynamic";
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
+type RecentRateRow = {
+  id: number;
+  as_of_date: string;
+  base_currency: string;
+  quote_currency: string;
+  rate_mid: number | string | null;
+  is_official: boolean;
+  is_manual_override: boolean;
+  created_at: string;
+};
+
 export async function GET() {
   const ok = await isAdminAuthenticated();
   if (!ok) {
@@ -34,7 +49,9 @@ export async function GET() {
       );
     }
 
-    const mapped = (data ?? []).map((row: any) => ({
+    const rows = (data ?? []) as RecentRateRow[];
+
+    const mapped = rows.map((row) => ({
       id: row.id,
       asOfDate: row.as_of_date,
       baseCurrency: row.base_currency,
@@ -46,12 +63,12 @@ export async function GET() {
     }));
 
     return NextResponse.json({ data: mapped }, { status: 200 });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Unexpected error loading recent FX rates:", err);
     return NextResponse.json(
       {
         error: "Unexpected error while loading recent FX rates",
-        details: err?.message ?? String(err),
+        details: getErrorMessage(err, String(err)),
       },
       { status: 500 }
     );

@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
         },
       }
     );
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("[FX] /summary/insights error", error);
     return NextResponse.json(
       {

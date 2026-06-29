@@ -2,6 +2,10 @@
 import { NextResponse } from "next/server";
 import { ADMIN_COOKIE_NAME } from "@/lib/admin/auth";
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => null);
@@ -40,11 +44,11 @@ export async function POST(request: Request) {
     });
 
     return res;
-  } catch (err: any) {
+  } catch (err: unknown) {
     return NextResponse.json(
       {
         error: "Unexpected error during admin login",
-        details: err?.message ?? String(err),
+        details: getErrorMessage(err, String(err)),
       },
       { status: 500 }
     );

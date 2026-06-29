@@ -118,7 +118,7 @@ export async function GET(req: NextRequest) {
         500,
         "DB_ERROR",
         "Failed to load FX history.",
-        (result as any).error?.message
+        result.error.message
       );
     }
 

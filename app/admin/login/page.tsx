@@ -3,6 +3,10 @@
 
 import { FormEvent, useState } from "react";
 
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
+}
+
 export default function AdminLoginPage() {
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
@@ -30,9 +34,9 @@ export default function AdminLoginPage() {
 
       // Redirect to admin dashboard
       window.location.href = "/admin";
-    } catch (err: any) {
+    } catch (err: unknown) {
       setStatus("error");
-      setError(err?.message || "Unexpected error during login");
+      setError(getErrorMessage(err, "Unexpected error during login"));
     }
   }
 
