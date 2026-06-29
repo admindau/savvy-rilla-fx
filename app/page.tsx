@@ -168,6 +168,33 @@ function buildUsdSspCommentary(
   return `${sentence1}${sentence2}${sentence3}`.trim();
 }
 
+
+function formatRate(value: number | null | undefined, digits = 2) {
+  if (value == null || Number.isNaN(value)) return "—";
+  return value.toLocaleString("en-US", {
+    maximumFractionDigits: digits,
+  });
+}
+
+function formatPercent(value: number | null | undefined, digits = 2) {
+  if (value == null || Number.isNaN(value)) return "—";
+  const sign = value >= 0 ? "+" : "";
+  return `${sign}${value.toFixed(digits)}%`;
+}
+
+function getMovementClass(value: number | null | undefined) {
+  if (value == null || Number.isNaN(value)) return "text-zinc-200";
+  if (Math.abs(value) < 0.05) return "text-zinc-200";
+  return value >= 0 ? "text-emerald-400" : "text-red-400";
+}
+
+function getHealthBadgeClass(tone: string) {
+  if (tone === "positive") return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
+  if (tone === "warning") return "border-orange-500/30 bg-orange-500/10 text-orange-300";
+  if (tone === "danger") return "border-red-500/30 bg-red-500/10 text-red-300";
+  return "border-amber-500/30 bg-amber-500/10 text-amber-300";
+}
+
 export default async function HomePage() {
   const [
     latestRates,
@@ -218,6 +245,14 @@ export default async function HomePage() {
 
   const fxInsights = usdSummary ? buildInsightsFromSummary(usdSummary) : [];
   const marketHealth = buildMarketHealthFromSummary(usdSummary);
+  const marketHealthBadgeClass = getHealthBadgeClass(marketHealth.tone);
+  const healthDrivers = marketHealth.drivers.slice(0, 3);
+  const dailyMove = usdSummary?.changes?.daily_pct ?? usdChangePct;
+  const sevenDayMove = usdSummary?.changes?.seven_day_pct ?? null;
+  const thirtyDayMove = usdSummary?.changes?.thirty_day_pct ?? null;
+  const thirtyDayAverage = usdSummary?.averages?.thirty_day ?? null;
+  const thirtyDaySpread = usdSummary?.ranges?.thirty_day?.spread_pct ?? null;
+  const historyCount = usdSummary?.observations?.history_count ?? 0;
 
   // If "all" history is missing or super short, fall back to 365d series
   const allHistoryPoints =
@@ -558,7 +593,7 @@ export default async function HomePage() {
         </section>
 
         {/* Market Intelligence Center */}
-        <section className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-5">
+        <section className="space-y-5 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <p className="text-[0.7rem] uppercase tracking-[0.25em] text-zinc-500">
@@ -574,30 +609,114 @@ export default async function HomePage() {
               </p>
             </div>
             <div className="rounded-full border border-zinc-800 bg-black px-3 py-1 text-[0.7rem] text-zinc-400">
-              Experimental intelligence · v1 data
+              Intelligence layer · FX-II-01C
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+            <div className="rounded-2xl border border-zinc-800 bg-black/50 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-[0.65rem] uppercase tracking-[0.22em] text-zinc-500">
+                    Market health score
+                  </p>
+                  <div className="mt-3 flex items-end gap-3">
+                    <p className="text-5xl font-semibold tracking-tight text-zinc-50">
+                      {marketHealth.score}
+                    </p>
+                    <p className="pb-2 text-sm text-zinc-500">/100</p>
+                  </div>
+                </div>
+                <span
+                  className={`rounded-full border px-3 py-1 text-xs font-medium ${marketHealthBadgeClass}`}
+                >
+                  {marketHealth.label}
+                </span>
+              </div>
+
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-zinc-900">
+                <div
+                  className="h-full rounded-full bg-zinc-100"
+                  style={{ width: `${marketHealth.score}%` }}
+                />
+              </div>
+
+              <p className="mt-4 text-sm leading-6 text-zinc-400">
+                {marketHealth.description}
+              </p>
+
+              <div className="mt-4 space-y-2">
+                {healthDrivers.map((driver) => (
+                  <div
+                    key={driver}
+                    className="flex gap-2 rounded-xl border border-zinc-900 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-400"
+                  >
+                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-500" />
+                    <span>{driver}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-1">
+              <div className="rounded-2xl border border-zinc-800 bg-black/40 p-4">
+                <p className="text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
+                  Latest USD/SSP
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-zinc-50">
+                  {formatRate(usdMid, 4)}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Fixing date: {usdSummary?.as_of_date ?? latestDate}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-800 bg-black/40 p-4">
+                <p className="text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
+                  Data depth
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-zinc-50">
+                  {historyCount.toLocaleString("en-US")}
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Observations feeding the signal
+                </p>
+              </div>
             </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-xl border border-zinc-800 bg-black/40 p-4">
               <p className="text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
-                Health score
+                Daily move
               </p>
-              <p className="mt-2 text-2xl font-semibold">
-                {marketHealth.score}/100
+              <p className={`mt-2 text-lg font-semibold ${getMovementClass(dailyMove)}`}>
+                {formatPercent(dailyMove)}
               </p>
-              <p className="mt-1 text-xs text-zinc-500">{marketHealth.label}</p>
+              <p className="mt-1 text-xs text-zinc-500">vs previous fixing</p>
             </div>
 
             <div className="rounded-xl border border-zinc-800 bg-black/40 p-4">
               <p className="text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
-                Trend
+                7-day trend
               </p>
-              <p className="mt-2 text-lg font-semibold">
+              <p className={`mt-2 text-lg font-semibold ${getMovementClass(sevenDayMove)}`}>
                 {usdSummary?.trend?.label ?? "Range-Bound"}
               </p>
               <p className="mt-1 text-xs text-zinc-500">
-                {usdSummary?.trend?.window_days ?? 3}-day signal
+                {formatPercent(sevenDayMove)} over 7 days
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-zinc-800 bg-black/40 p-4">
+              <p className="text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
+                30-day move
+              </p>
+              <p className={`mt-2 text-lg font-semibold ${getMovementClass(thirtyDayMove)}`}>
+                {formatPercent(thirtyDayMove)}
+              </p>
+              <p className="mt-1 text-xs text-zinc-500">
+                Avg rate: {formatRate(thirtyDayAverage, 2)}
               </p>
             </div>
 
@@ -605,34 +724,12 @@ export default async function HomePage() {
               <p className="text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
                 Volatility
               </p>
-              <p className="mt-2 text-lg font-semibold">
-                {usdSummary?.volatility?.avg_daily_move_pct == null
-                  ? "—"
-                  : `${usdSummary.volatility.avg_daily_move_pct.toFixed(2)}%`}
+              <p className="mt-2 text-lg font-semibold text-zinc-50">
+                {usdSummary?.volatility?.label ?? "unknown"}
               </p>
-              <p className="mt-1 text-xs text-zinc-500">Avg daily move</p>
-            </div>
-
-            <div className="rounded-xl border border-zinc-800 bg-black/40 p-4">
-              <p className="text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
-                Latest move
+              <p className="mt-1 text-xs text-zinc-500">
+                30d spread: {formatPercent(thirtyDaySpread)}
               </p>
-              <p
-                className={
-                  usdChangePct == null
-                    ? "mt-2 text-lg font-semibold text-zinc-200"
-                    : usdChangePct >= 0
-                    ? "mt-2 text-lg font-semibold text-emerald-400"
-                    : "mt-2 text-lg font-semibold text-red-400"
-                }
-              >
-                {usdChangePct == null
-                  ? "—"
-                  : `${usdChangePct >= 0 ? "+" : ""}${usdChangePct.toFixed(
-                      2
-                    )}%`}
-              </p>
-              <p className="mt-1 text-xs text-zinc-500">vs previous fixing</p>
             </div>
           </div>
         </section>
