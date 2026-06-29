@@ -42,6 +42,13 @@ type CacheAnalytics = {
     }>;
     recent: string[];
   };
+  observability: {
+    metricsEndpoint: string;
+    adminDashboard: string;
+    cacheHeaders: string[];
+    recommendedChecks: string[];
+    operationalNotes: string[];
+  };
 };
 
 type CacheResponse = {
@@ -335,6 +342,61 @@ export default function AdminCachePage() {
                   <SmallStat label="Stored keys" value={formatNumber(analytics.keys.total)} />
                   <SmallStat label="Memory" value={analytics.summary.estimatedMemoryLabel} />
                 </div>
+              </div>
+            </section>
+
+
+            <section className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6">
+                <h2 className="text-xl font-semibold">Observability</h2>
+                <p className="mt-1 text-sm text-white/50">
+                  Use these signals to verify cache behavior during deployments, manual rate
+                  updates, and client integrations.
+                </p>
+
+                <div className="mt-5 grid gap-3">
+                  <SmallStat label="Metrics endpoint" value={analytics.observability.metricsEndpoint} />
+                  <SmallStat label="Admin dashboard" value={analytics.observability.adminDashboard} />
+                </div>
+
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {analytics.observability.cacheHeaders.map((header) => (
+                    <code
+                      key={header}
+                      className="rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs text-white/60"
+                    >
+                      {header}
+                    </code>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6">
+                <h2 className="text-xl font-semibold">Operational checks</h2>
+                <div className="mt-5 space-y-3">
+                  {analytics.observability.recommendedChecks.map((check) => (
+                    <div
+                      key={check}
+                      className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white/60"
+                    >
+                      {check}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <section className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-6">
+              <h2 className="text-xl font-semibold">Operations notes</h2>
+              <div className="mt-5 grid gap-3 md:grid-cols-2">
+                {analytics.observability.operationalNotes.map((note) => (
+                  <div
+                    key={note}
+                    className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-white/55"
+                  >
+                    {note}
+                  </div>
+                ))}
               </div>
             </section>
 

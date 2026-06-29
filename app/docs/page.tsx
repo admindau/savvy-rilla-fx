@@ -913,7 +913,7 @@ export default function DocsPage() {
           <SectionTitle
             eyebrow="HTTP Caching"
             title="Use conditional requests to reduce bandwidth"
-            description="Cacheable endpoints return ETag, Last-Modified, Age, Expires, and Cache-Control headers. Clients can revalidate with If-None-Match or If-Modified-Since and receive 304 Not Modified when data has not changed."
+            description="Cacheable endpoints return ETag, Last-Modified, Age, Expires, Cache-Control, and X-Cache headers. Clients can revalidate with If-None-Match or If-Modified-Since and receive 304 Not Modified when data has not changed."
           />
 
           <div className="grid gap-4 lg:grid-cols-3">
@@ -921,6 +921,9 @@ export default function DocsPage() {
               ["ETag", "Send If-None-Match with the previous ETag to avoid downloading unchanged JSON."],
               ["Last-Modified", "Send If-Modified-Since to revalidate based on the latest cached timestamp."],
               ["Stale support", "Responses include stale-while-revalidate and stale-if-error directives for resilient clients and CDNs."],
+              ["X-Cache", "HIT means the response came from the in-memory cache; MISS means the endpoint refreshed the payload."],
+              ["Age", "Shows how many seconds the cached payload has lived since it was generated."],
+              ["Admin operations", "The /admin/cache console shows live metrics and allows targeted cache clearing."],
             ].map(([title, body]) => (
               <div
                 key={title}
@@ -932,23 +935,111 @@ export default function DocsPage() {
             ))}
           </div>
 
-          <CodeBlock
-            code={`# First request
+          <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+            <CodeBlock
+              code={`# First request
 curl -i "${API_BASE}/rates/latest" \
   -H "Accept: application/json"
 
 # Revalidate with the returned ETag
 curl -i "${API_BASE}/rates/latest" \
   -H "Accept: application/json" \
-  -H 'If-None-Match: "paste-etag-here"'`}
+  -H 'If-None-Match: "paste-etag-here"'
+
+# A fresh cached resource returns 200 OK with JSON
+# An unchanged resource can return 304 Not Modified with no body`}
+            />
+
+            <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
+              <h3 className="font-semibold text-white">Recommended client behavior</h3>
+              <div className="mt-4 space-y-3 text-sm leading-6 text-zinc-400">
+                <p>Store the latest ETag returned by the endpoint.</p>
+                <p>Send that value back in If-None-Match during polling or refresh operations.</p>
+                <p>Treat 304 Not Modified as a successful response and reuse your local cached JSON.</p>
+                <p>For dashboards, respect Cache-Control instead of polling faster than the published TTL.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-3xl border border-white/10">
+            <table className="w-full border-collapse text-left text-sm">
+              <thead className="bg-white/[0.04] text-xs uppercase tracking-[0.18em] text-zinc-500">
+                <tr>
+                  <th className="px-4 py-3">Endpoint group</th>
+                  <th className="px-4 py-3">Typical TTL</th>
+                  <th className="px-4 py-3">Operational note</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/10">
+                {[
+                  ["Latest rates", "30 seconds", "Short-lived cache for high-traffic market snapshots."],
+                  ["Recent rates", "60 seconds", "Useful for dashboards and widgets."],
+                  ["History", "5 minutes", "Historical ranges change less frequently."],
+                  ["Summary and insights", "60 seconds", "Balances fresh commentary with reduced database work."],
+                  ["Currencies", "24 hours", "Reference data with low change frequency."],
+                ].map(([group, ttl, note]) => (
+                  <tr key={group}>
+                    <td className="px-4 py-3 text-zinc-200">{group}</td>
+                    <td className="px-4 py-3 text-zinc-400">{ttl}</td>
+                    <td className="px-4 py-3 text-zinc-400">{note}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="cache-observability" className="mt-16 space-y-6">
+          <SectionTitle
+            eyebrow="Cache Observability"
+            title="Monitor cache behavior from the admin console"
+            description="The cache dashboard gives operators a live view of hit ratio, entries, memory estimate, pending coalesced requests, namespaces, recent keys, and clear-cache operations."
           />
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            {[
+              ["Dashboard", "/admin/cache"],
+              ["Metrics API", "/api/admin/cache"],
+              ["Public verification", "curl -i /api/v1/rates/latest"],
+            ].map(([label, value]) => (
+              <div
+                key={label}
+                className="rounded-3xl border border-white/10 bg-white/[0.035] p-5"
+              >
+                <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">{label}</p>
+                <code className="mt-3 block break-words text-sm text-white">{value}</code>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
+              <h3 className="font-semibold text-white">Deployment checks</h3>
+              <ul className="mt-4 space-y-3 text-sm leading-6 text-zinc-400">
+                <li>Call a public endpoint twice and confirm X-Cache changes from MISS to HIT.</li>
+                <li>Send If-None-Match with the returned ETag and confirm 304 Not Modified.</li>
+                <li>Open /admin/cache and verify hit ratio, entries, and recent keys.</li>
+                <li>Clear rates cache after manual exchange-rate updates.</li>
+              </ul>
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-5">
+              <h3 className="font-semibold text-white">Operational limits</h3>
+              <ul className="mt-4 space-y-3 text-sm leading-6 text-zinc-400">
+                <li>The current cache is in-memory and process-local.</li>
+                <li>Serverless cold starts begin with an empty cache.</li>
+                <li>Admin and API key routes must remain uncached.</li>
+                <li>The cache manager interface is ready for a future Redis-backed store.</li>
+              </ul>
+            </div>
+          </div>
         </section>
 
         <section id="headers" className="mt-16 space-y-6">
           <SectionTitle
             eyebrow="Headers"
             title="Operational headers"
-            description="The API returns headers that help clients cache responses, identify request traces, and respect rate limits."
+            description="The API returns headers that help clients cache responses, identify request traces, respect rate limits, and monitor cache behavior."
           />
 
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -959,6 +1050,12 @@ curl -i "${API_BASE}/rates/latest" \
               ["X-RateLimit-Limit", "Maximum requests in the active window."],
               ["X-RateLimit-Remaining", "Requests remaining in the active window."],
               ["X-RateLimit-Reset", "Unix timestamp for the rate-limit reset."],
+              ["Cache-Control", "Freshness, CDN, stale-while-revalidate, and stale-if-error policy."],
+              ["ETag", "Stable validator for conditional requests."],
+              ["Last-Modified", "Timestamp validator for If-Modified-Since."],
+              ["X-Cache", "HIT or MISS cache outcome."],
+              ["X-Cache-TTL", "Configured cache duration in seconds."],
+              ["Age", "Age of the cached response in seconds."],
             ].map(([header, description]) => (
               <div
                 key={header}

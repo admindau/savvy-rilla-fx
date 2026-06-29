@@ -19,7 +19,15 @@ export async function GET() {
   const unauthorized = await requireAdmin();
   if (unauthorized) return unauthorized;
 
-  return NextResponse.json({ analytics: getCacheAnalytics() });
+  return NextResponse.json(
+    { analytics: getCacheAnalytics() },
+    {
+      headers: {
+        "Cache-Control": "no-store",
+        "X-Cache-Dashboard": "enabled",
+      },
+    },
+  );
 }
 
 export async function DELETE(req: NextRequest) {
@@ -36,20 +44,39 @@ export async function DELETE(req: NextRequest) {
           error: "Invalid cache tag",
           allowedTags: Object.values(CACHE_TAGS),
         },
-        { status: 400 },
+        {
+          status: 400,
+          headers: {
+            "Cache-Control": "no-store",
+          },
+        },
       );
     }
 
     const result = clearCacheByTag(tag);
-    return NextResponse.json({
-      message: `Cleared ${result.cleared} cache entr${result.cleared === 1 ? "y" : "ies"} for ${tag}.`,
-      cleared: result.cleared,
-      analytics: result.analytics,
-    });
+    return NextResponse.json(
+      {
+        message: `Cleared ${result.cleared} cache entr${result.cleared === 1 ? "y" : "ies"} for ${tag}.`,
+        cleared: result.cleared,
+        analytics: result.analytics,
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
   }
 
-  return NextResponse.json({
-    message: "Cache cleared.",
-    analytics: clearCache(),
-  });
+  return NextResponse.json(
+    {
+      message: "Cache cleared.",
+      analytics: clearCache(),
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    },
+  );
 }

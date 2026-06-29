@@ -39,6 +39,13 @@ export type CacheAnalytics = {
     }>;
     recent: string[];
   };
+  observability: {
+    metricsEndpoint: string;
+    adminDashboard: string;
+    cacheHeaders: string[];
+    recommendedChecks: string[];
+    operationalNotes: string[];
+  };
 };
 
 function formatBytes(bytes: number) {
@@ -131,6 +138,33 @@ export function getCacheAnalytics(): CacheAnalytics {
       total: keys.length,
       byNamespace,
       recent: keys.slice(0, 20),
+    },
+    observability: {
+      metricsEndpoint: "/api/admin/cache",
+      adminDashboard: "/admin/cache",
+      cacheHeaders: [
+        "Cache-Control",
+        "ETag",
+        "Last-Modified",
+        "Age",
+        "Expires",
+        "X-Cache",
+        "X-Cache-TTL",
+        "X-Cache-Age",
+        "X-Cache-Remaining",
+      ],
+      recommendedChecks: [
+        "Call a public endpoint twice and confirm X-Cache moves from MISS to HIT.",
+        "Send If-None-Match with the returned ETag and confirm 304 Not Modified when data is unchanged.",
+        "Review /admin/cache after manual rate updates to confirm rates and summary entries can be cleared.",
+        "Monitor hit ratio after deployments because serverless instances start with a cold in-memory cache.",
+      ],
+      operationalNotes: [
+        "The cache is process-local in this release and resets when the serverless runtime restarts.",
+        "Admin and API-key management routes must remain uncached.",
+        "Clear rates and summary cache after manual rate updates.",
+        "A future Redis-backed cache can reuse the same cache manager interface.",
+      ],
     },
   };
 }
