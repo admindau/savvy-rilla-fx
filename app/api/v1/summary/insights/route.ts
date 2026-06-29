@@ -1,7 +1,9 @@
 // app/api/v1/summary/insights/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import {
+  buildAiCommentaryFromSummary,
   buildInsightsFromSummary,
+  buildMarketHealthFromSummary,
   type MarketSummary,
 } from "@/lib/fx/insights";
 
@@ -46,6 +48,8 @@ export async function GET(req: NextRequest) {
 
     const summary = (await res.json()) as MarketSummary;
     const insights = buildInsightsFromSummary(summary);
+    const marketHealth = buildMarketHealthFromSummary(summary);
+    const commentary = buildAiCommentaryFromSummary(summary, marketHealth);
 
     return NextResponse.json(
       {
@@ -54,6 +58,9 @@ export async function GET(req: NextRequest) {
         quote: summary.quote,
         as_of_date: summary.as_of_date,
         insights,
+        commentary,
+        marketHealth,
+        market_health: marketHealth,
         meta: {
           version: "v1",
           source: "/api/v1/summary/market",

@@ -94,6 +94,23 @@ export type MarketHealth = {
   components: MarketHealthComponent[];
 };
 
+export type MarketCommentaryTone = "positive" | "neutral" | "cautious" | "risk";
+
+export type MarketCommentary = {
+  headline: string;
+  summary: string;
+  outlook: string;
+  tone: MarketCommentaryTone;
+  confidence: "low" | "medium" | "high";
+  bullets: string[];
+  generated_from: {
+    pair: string;
+    as_of_date: string;
+    market_health_score: number;
+    market_health_status: MarketHealthLabel;
+  };
+};
+
 export type FxRatePoint = {
   as_of_date: string;
   rate_mid: number | string | null;
@@ -620,6 +637,137 @@ export function buildMarketHealthFromSummary(
     components,
   };
 }
+
+
+function describeMovement(value: number | null | undefined) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "not enough comparable data";
+  }
+
+  const abs = Math.abs(value);
+  const direction = value > 0 ? "higher" : value < 0 ? "lower" : "unchanged";
+
+  if (abs < 0.05) return "broadly unchanged";
+  if (abs < 0.3) return `slightly ${direction}`;
+  if (abs < 1) return `moderately ${direction}`;
+  return `sharply ${direction}`;
+}
+
+function commentaryToneFromHealth(health: MarketHealth): MarketCommentaryTone {
+  if (health.tone === "positive") return "positive";
+  if (health.tone === "warning") return "cautious";
+  if (health.tone === "danger") return "risk";
+  return "neutral";
+}
+
+function commentaryConfidence(summary: MarketSummary): MarketCommentary["confidence"] {
+  const count = summary.observations?.history_count ?? 0;
+  if (count >= 20) return "high";
+  if (count >= 7) return "medium";
+  return "low";
+}
+
+export function buildAiCommentaryFromSummary(
+  summary: MarketSummary,
+  health: MarketHealth = buildMarketHealthFromSummary(summary)
+): MarketCommentary {
+  const pairLabel = formatPair(summary);
+  const dailyChange = summary.changes?.daily_pct ?? summary.change_pct_vs_previous;
+  const sevenDayChange = summary.changes?.seven_day_pct ?? summary.trend?.change_pct ?? null;
+  const thirtyDayChange = summary.changes?.thirty_day_pct ?? null;
+  const volatilityLabel =
+    summary.signals?.volatility_label ??
+    classifyVolatility(summary.volatility?.avg_daily_move_pct ?? null);
+  const trendLabel = summary.trend?.label ?? "Range-Bound";
+  const trendStrength = summary.signals?.trend_strength ?? "unknown";
+  const thirtyDayRange = summary.ranges?.thirty_day;
+  const spreadPct = thirtyDayRange?.spread_pct ?? null;
+
+  const latestRate = summary.mid_rate.toLocaleString("en-US", {
+    maximumFractionDigits: 4,
+  });
+
+  const headline =
+    health.score >= 75
+      ? `${pairLabel} remains broadly stable`
+      : health.score >= 60
+        ? `${pairLabel} shows mixed but manageable conditions`
+        : `${pairLabel} requires closer monitoring`;
+
+  const dailyPhrase = describeMovement(dailyChange);
+  const weeklyPhrase = describeMovement(sevenDayChange);
+
+  const summaryText =
+    `As of ${summary.as_of_date}, ${pairLabel} fixed at ${latestRate}. ` +
+    `The pair is ${dailyPhrase} versus the previous fixing and ${weeklyPhrase} over the recent trend window. ` +
+    `The current Market Health Score is ${health.score}/100 (${health.status}), supported by ${volatilityLabel} volatility and a ${trendLabel.toLowerCase()} trend signal.`;
+
+  let rangeSentence = "The recent trading range is not yet available.";
+  if (thirtyDayRange?.low != null && thirtyDayRange.high != null) {
+    rangeSentence =
+      `Over the 30-day window, the pair traded between ${thirtyDayRange.low.toLocaleString(
+        "en-US",
+        { maximumFractionDigits: 2 }
+      )} and ${thirtyDayRange.high.toLocaleString("en-US", {
+        maximumFractionDigits: 2,
+      })}`;
+    if (spreadPct !== null) {
+      rangeSentence += `, a spread of ${formatPct(spreadPct)} around the latest fixing.`;
+    } else {
+      rangeSentence += ".";
+    }
+  }
+
+  const momentumSentence =
+    thirtyDayChange === null
+      ? "Longer-window momentum remains thin because there are not enough comparable observations."
+      : `Thirty-day momentum is ${describeMovement(thirtyDayChange)} (${formatPct(
+          thirtyDayChange
+        )}), suggesting ${
+          Math.abs(thirtyDayChange) < 0.5
+            ? "limited directional pressure"
+            : thirtyDayChange > 0
+              ? "upward pressure in the quoted rate"
+              : "downward pressure in the quoted rate"
+        }.`;
+
+  let outlook: string;
+  if (health.score >= 75) {
+    outlook =
+      "Near-term conditions appear stable. Continued low volatility and contained daily movement would support a steady market outlook.";
+  } else if (health.score >= 60) {
+    outlook =
+      "Near-term conditions remain manageable, but the market should be monitored for any widening in the trading range or stronger directional movement.";
+  } else {
+    outlook =
+      "Near-term conditions require caution. Elevated movement, wider ranges, or stronger trend pressure could point to a less stable market environment.";
+  }
+
+  const bullets = [
+    rangeSentence,
+    momentumSentence,
+    trendStrength === "unknown"
+      ? `Trend signal is ${trendLabel}.`
+      : `Trend signal is ${trendLabel} with ${trendStrength} strength.`,
+    ...health.drivers.slice(0, 2),
+  ].slice(0, 5);
+
+  return {
+    headline,
+    summary: summaryText,
+    outlook,
+    tone: commentaryToneFromHealth(health),
+    confidence: commentaryConfidence(summary),
+    bullets,
+    generated_from: {
+      pair: pairLabel,
+      as_of_date: summary.as_of_date,
+      market_health_score: health.score,
+      market_health_status: health.status,
+    },
+  };
+}
+
 
 export function buildInsightsFromSummary(summary: MarketSummary): string[] {
   const insights: string[] = [];

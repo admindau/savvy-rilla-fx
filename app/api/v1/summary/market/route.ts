@@ -1,6 +1,7 @@
 // app/api/v1/summary/market/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import {
+  buildAiCommentaryFromSummary,
   buildMarketHealthFromSummary,
   buildMarketSummaryFromRows,
   type FxRatePoint,
@@ -112,12 +113,14 @@ export async function GET(req: NextRequest) {
     });
 
     const marketHealth = buildMarketHealthFromSummary(summary);
+    const commentary = buildAiCommentaryFromSummary(summary, marketHealth);
 
     return NextResponse.json(
       {
         ...summary,
         marketHealth,
         market_health: marketHealth,
+        commentary,
       },
       {
         status: 200,

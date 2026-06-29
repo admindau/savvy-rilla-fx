@@ -4,6 +4,7 @@ import Link from "next/link";
 import FxHistoryChart from "@/components/fx-history-chart";
 import FxMultiCurrencyMarketSnapshot from "@/components/fx-multicurrency-market-snapshot";
 import {
+  buildAiCommentaryFromSummary,
   buildInsightsFromSummary,
   buildMarketHealthFromSummary,
   type MarketSummary,
@@ -104,71 +105,6 @@ async function fetchJson<T>(path: string): Promise<T | null> {
   }
 }
 
-/**
- * Simple rule-based “AI-style” commentary for USD/SSP,
- * built from the summary + 30d range.
- */
-function buildUsdSspCommentary(
-  summary: MarketSummary,
-  opts: { min30: number | null; max30: number | null }
-): string {
-  const { min30, max30 } = opts;
-  const date = summary.as_of_date ?? "today";
-  const mid = summary.mid_rate;
-  const change = summary.change_pct_vs_previous ?? null;
-  const trendLabel = summary.trend?.label ?? "Range-Bound";
-
-  if (mid == null) {
-    return `USD/SSP summary data is not available for ${date}.`;
-  }
-
-  const midStr = mid.toLocaleString("en-US", {
-    maximumFractionDigits: 4,
-  });
-
-  let sentence1: string;
-
-  if (change == null || Number.isNaN(change)) {
-    sentence1 = `On ${date}, USD/SSP fixed at ${midStr}.`;
-  } else {
-    const changeAbs = Math.abs(change);
-    const changeStr = `${change >= 0 ? "+" : ""}${change.toFixed(2)}%`;
-
-    if (changeAbs < 0.05) {
-      sentence1 = `On ${date}, USD/SSP was broadly unchanged, fixing at ${midStr} (${changeStr} vs the previous fixing).`;
-    } else if (changeAbs < 0.3) {
-      sentence1 =
-        change > 0
-          ? `On ${date}, USD/SSP edged higher to ${midStr} (${changeStr} vs the previous fixing).`
-          : `On ${date}, USD/SSP eased lower to ${midStr} (${changeStr} vs the previous fixing).`;
-    } else {
-      sentence1 =
-        change > 0
-          ? `On ${date}, USD/SSP moved notably higher to ${midStr} (${changeStr} vs the previous fixing).`
-          : `On ${date}, USD/SSP weakened noticeably to ${midStr} (${changeStr} vs the previous fixing).`;
-    }
-  }
-
-  let sentence2 = "";
-  if (min30 != null && max30 != null) {
-    const minStr = min30.toLocaleString("en-US", {
-      maximumFractionDigits: 2,
-    });
-    const maxStr = max30.toLocaleString("en-US", {
-      maximumFractionDigits: 2,
-    });
-    sentence2 = ` Over the last 30 days, the pair has traded between ${minStr} and ${maxStr}.`;
-  }
-
-  let sentence3 = "";
-  if (trendLabel) {
-    sentence3 = ` Current trend signal is “${trendLabel}”, pointing to a ${trendLabel.toLowerCase()} market regime.`;
-  }
-
-  return `${sentence1}${sentence2}${sentence3}`.trim();
-}
-
-
 function formatRate(value: number | null | undefined, digits = 2) {
   if (value == null || Number.isNaN(value)) return "—";
   return value.toLocaleString("en-US", {
@@ -236,6 +172,7 @@ export default async function HomePage() {
       ? Math.max(...history30.points.map((p) => p.mid))
       : null;
 
+
   const latestRatesArray =
     latestRates?.rates
       ? Object.entries(latestRates.rates).sort(([a], [b]) =>
@@ -283,10 +220,7 @@ export default async function HomePage() {
 
   const usdCommentary =
     usdSummary != null
-      ? buildUsdSspCommentary(usdSummary, {
-          min30: usdMin30,
-          max30: usdMax30,
-        })
+      ? buildAiCommentaryFromSummary(usdSummary, marketHealth)
       : null;
 
   return (
@@ -536,11 +470,30 @@ export default async function HomePage() {
                 {/* Daily FX commentary */}
                 {usdCommentary && (
                   <div className="mt-3 border-t border-zinc-800 pt-3 text-xs">
-                    <p className="mb-1 text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
-                      Daily FX commentary (beta)
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <p className="text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
+                        AI commentary 2.0
+                      </p>
+                      <span className="rounded-full border border-zinc-800 px-2 py-0.5 text-[0.65rem] uppercase tracking-[0.16em] text-zinc-500">
+                        {usdCommentary.confidence} confidence
+                      </span>
+                    </div>
+                    <p className="text-[0.8rem] font-medium text-zinc-100">
+                      {usdCommentary.headline}
                     </p>
-                    <p className="text-[0.8rem] text-zinc-300 leading-relaxed">
-                      {usdCommentary}
+                    <p className="mt-1 text-[0.8rem] text-zinc-300 leading-relaxed">
+                      {usdCommentary.summary}
+                    </p>
+                    <ul className="mt-2 space-y-1.5 text-[0.75rem] text-zinc-400">
+                      {usdCommentary.bullets.slice(0, 3).map((item) => (
+                        <li key={item} className="flex gap-2">
+                          <span className="mt-[6px] h-1 w-1 rounded-full bg-zinc-600" />
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-2 rounded-lg border border-zinc-800 bg-zinc-950/70 p-2 text-[0.75rem] text-zinc-300">
+                      {usdCommentary.outlook}
                     </p>
                   </div>
                 )}
