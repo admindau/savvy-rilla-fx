@@ -667,6 +667,7 @@ export default function DocsPage() {
             ["Explorer", "#explorer"],
             ["Endpoints", "#endpoints"],
             ["Errors", "#errors"],
+            ["Caching", "#caching"],
             ["Headers", "#headers"],
           ].map(([label, href]) => (
             <a
@@ -905,6 +906,42 @@ export default function DocsPage() {
 }`}
             />
           </div>
+        </section>
+
+
+        <section id="caching" className="mt-16 space-y-6">
+          <SectionTitle
+            eyebrow="HTTP Caching"
+            title="Use conditional requests to reduce bandwidth"
+            description="Cacheable endpoints return ETag, Last-Modified, Age, Expires, and Cache-Control headers. Clients can revalidate with If-None-Match or If-Modified-Since and receive 304 Not Modified when data has not changed."
+          />
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            {[
+              ["ETag", "Send If-None-Match with the previous ETag to avoid downloading unchanged JSON."],
+              ["Last-Modified", "Send If-Modified-Since to revalidate based on the latest cached timestamp."],
+              ["Stale support", "Responses include stale-while-revalidate and stale-if-error directives for resilient clients and CDNs."],
+            ].map(([title, body]) => (
+              <div
+                key={title}
+                className="rounded-3xl border border-white/10 bg-white/[0.035] p-5"
+              >
+                <h3 className="font-semibold text-white">{title}</h3>
+                <p className="mt-2 text-sm leading-6 text-zinc-400">{body}</p>
+              </div>
+            ))}
+          </div>
+
+          <CodeBlock
+            code={`# First request
+curl -i "${API_BASE}/rates/latest" \
+  -H "Accept: application/json"
+
+# Revalidate with the returned ETag
+curl -i "${API_BASE}/rates/latest" \
+  -H "Accept: application/json" \
+  -H 'If-None-Match: "paste-etag-here"'`}
+          />
         </section>
 
         <section id="headers" className="mt-16 space-y-6">

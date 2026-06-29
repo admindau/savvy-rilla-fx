@@ -22,9 +22,9 @@ export function buildApiHeaders(
 
   const cacheControl =
     cache === "public"
-      ? `public, max-age=${cacheSeconds}, s-maxage=${cacheSeconds}, stale-while-revalidate=${cacheSeconds}`
+      ? `public, max-age=${cacheSeconds}, s-maxage=${cacheSeconds}, stale-while-revalidate=${cacheSeconds * 5}, stale-if-error=${cacheSeconds * 10}`
       : cache === "private"
-        ? `private, max-age=${cacheSeconds}`
+        ? `private, max-age=${cacheSeconds}, stale-while-revalidate=${cacheSeconds}`
         : "no-store";
 
   const headers: Record<string, string> = {
@@ -35,6 +35,7 @@ export function buildApiHeaders(
     "X-FX-API-Version": context.version,
     "X-Request-ID": context.requestId,
     "X-Response-Time": `${durationMs}ms`,
+    Vary: "Accept-Encoding",
   };
 
   if (context.rateLimit) {

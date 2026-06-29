@@ -30,6 +30,8 @@ export function apiJson<T extends Record<string, unknown>>(
     cache?: ApiCacheMode;
     cacheSeconds?: number;
     headers?: Record<string, string>;
+    etag?: string;
+    lastModified?: Date | string;
   }
 ) {
   const status = options?.status ?? 200;
@@ -52,6 +54,15 @@ export function apiJson<T extends Record<string, unknown>>(
           cache: options?.cache,
           cacheSeconds: options?.cacheSeconds,
         }),
+        ...(options?.etag ? { ETag: options.etag } : {}),
+        ...(options?.lastModified
+          ? {
+              "Last-Modified":
+                options.lastModified instanceof Date
+                  ? options.lastModified.toUTCString()
+                  : options.lastModified,
+            }
+          : {}),
         ...(options?.headers ?? {}),
       },
     }
