@@ -1,0 +1,220 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Savvy Rilla FX API",
+    "summary": "South Sudan foreign exchange market intelligence API.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Savvy Rilla",
+      "url": "https://fx.savvyrilla.tech",
+      "email": "admin@savvygorilla.tech"
+    },
+    "license": {
+      "name": "Proprietary"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://fx.savvyrilla.tech",
+      "description": "Production"
+    },
+    {
+      "url": "http://localhost:3000",
+      "description": "Local development"
+    }
+  ],
+  "security": [
+    {
+      "ApiKeyHeader": []
+    },
+    {
+      "BearerApiKey": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health"
+    },
+    {
+      "name": "Rates"
+    },
+    {
+      "name": "Currencies"
+    },
+    {
+      "name": "Market Summary"
+    },
+    {
+      "name": "Export"
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "Health check",
+        "responses": {
+          "200": {
+            "description": "Service health response."
+          }
+        }
+      }
+    },
+    "/api/v1/rates/latest": {
+      "get": {
+        "tags": [
+          "Rates"
+        ],
+        "summary": "Latest FX rate",
+        "parameters": [
+          {
+            "name": "base",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "SSP"
+            }
+          },
+          {
+            "name": "quote",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "USD"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Latest exchange rate."
+          }
+        }
+      }
+    },
+    "/api/v1/rates/{quote}/latest": {
+      "get": {
+        "tags": [
+          "Rates"
+        ],
+        "summary": "Latest FX rate by quote",
+        "parameters": [
+          {
+            "name": "quote",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "USD"
+            }
+          },
+          {
+            "name": "base",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "SSP"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Latest exchange rate."
+          }
+        }
+      }
+    },
+    "/api/v1/rates/recent": {
+      "get": {
+        "tags": [
+          "Rates"
+        ],
+        "summary": "Recent FX rates",
+        "responses": {
+          "200": {
+            "description": "Recent exchange rates."
+          }
+        }
+      }
+    },
+    "/api/v1/rates/history": {
+      "get": {
+        "tags": [
+          "Rates"
+        ],
+        "summary": "Historical FX rates",
+        "responses": {
+          "200": {
+            "description": "Historical exchange rate points."
+          }
+        }
+      }
+    },
+    "/api/v1/currencies": {
+      "get": {
+        "tags": [
+          "Currencies"
+        ],
+        "summary": "Supported currencies",
+        "responses": {
+          "200": {
+            "description": "Supported currencies."
+          }
+        }
+      }
+    },
+    "/api/v1/summary/market": {
+      "get": {
+        "tags": [
+          "Market Summary"
+        ],
+        "summary": "Market summary",
+        "responses": {
+          "200": {
+            "description": "Market intelligence summary."
+          }
+        }
+      }
+    },
+    "/api/v1/summary/insights": {
+      "get": {
+        "tags": [
+          "Market Summary"
+        ],
+        "summary": "Market insights",
+        "responses": {
+          "200": {
+            "description": "AI-style insight response."
+          }
+        }
+      }
+    },
+    "/api/v1/export/rates": {
+      "get": {
+        "tags": [
+          "Export"
+        ],
+        "summary": "Export FX rates",
+        "responses": {
+          "200": {
+            "description": "Exported rate data."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      },
+      "BearerApiKey": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
