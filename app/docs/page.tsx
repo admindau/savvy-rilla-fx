@@ -627,6 +627,18 @@ export default function DocsPage() {
                 >
                   View endpoints
                 </a>
+                <a
+                  href="/docs/api"
+                  className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-5 py-3 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/15"
+                >
+                  API explorer
+                </a>
+                <a
+                  href="/docs/redoc"
+                  className="rounded-full border border-white/10 bg-white/[0.05] px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.1]"
+                >
+                  Reference manual
+                </a>
               </div>
             </div>
 
@@ -664,7 +676,8 @@ export default function DocsPage() {
             ["Overview", "#overview"],
             ["Quick Start", "#quick-start"],
             ["API Keys", "#api-keys"],
-            ["Explorer", "#explorer"],
+            ["Explorer", "/docs/api"],
+            ["Reference", "/docs/redoc"],
             ["Endpoints", "#endpoints"],
             ["Errors", "#errors"],
             ["Caching", "#caching"],
@@ -679,6 +692,41 @@ export default function DocsPage() {
             </a>
           ))}
         </nav>
+
+        <section id="interactive-docs" className="mt-8 grid gap-4 lg:grid-cols-3">
+          {[
+            {
+              title: "Interactive API Explorer",
+              body: "Execute live requests from the OpenAPI specification, configure parameters, and pass an API key from the browser.",
+              href: "/docs/api",
+              cta: "Open explorer",
+            },
+            {
+              title: "Reference Manual",
+              body: "Browse the complete OpenAPI reference with schemas, endpoint groups, authentication, and examples.",
+              href: "/docs/redoc",
+              cta: "Open manual",
+            },
+            {
+              title: "OpenAPI Source",
+              body: "Download the machine-readable OpenAPI 3.1 document for tooling, SDKs, Postman, and CI validation.",
+              href: "/openapi.json",
+              cta: "View JSON",
+            },
+          ].map((item) => (
+            <a
+              key={item.href}
+              href={item.href}
+              className="rounded-3xl border border-white/10 bg-white/[0.035] p-6 transition hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.06]"
+            >
+              <h2 className="text-lg font-semibold text-white">{item.title}</h2>
+              <p className="mt-3 text-sm leading-6 text-zinc-400">{item.body}</p>
+              <span className="mt-5 inline-flex rounded-full bg-white px-4 py-2 text-sm font-semibold text-black">
+                {item.cta}
+              </span>
+            </a>
+          ))}
+        </section>
 
         <section id="overview" className="mt-14 grid gap-4 md:grid-cols-4">
           {[
