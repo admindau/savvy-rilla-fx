@@ -1,8 +1,10 @@
 // app/api/v1/summary/insights/route.ts
 import { NextRequest } from "next/server";
-import { apiError, apiJson } from "@/lib/api/response";
+import { apiCachedJson, ApiRouteError } from "@/lib/api/cache-response";
+import { apiError } from "@/lib/api/response";
 import { apiOptions, withApiProtection } from "@/lib/api/middleware";
 import { isCurrencyCode, normalizeCurrencyCode } from "@/lib/api/validation";
+import { CACHE_TAGS } from "@/lib/cache";
 import {
   buildAiCommentaryFromSummary,
   buildInsightsFromSummary,
@@ -44,61 +46,72 @@ export const GET = withApiProtection(async function GET(req: NextRequest, contex
     );
   }
 
-  const apiBase = getApiBaseUrl();
-  const summaryUrl = `${apiBase}/api/v1/summary/market?base=${encodeURIComponent(
-    base
-  )}&quote=${encodeURIComponent(quote)}`;
+  return apiCachedJson(
+    req,
+    context,
+    {
+      namespace: "api:v1:summary:insights",
+      ttlSeconds: 60,
+      tags: [CACHE_TAGS.summary, CACHE_TAGS.rates],
+      varyBy: { base, quote },
+    },
+    async () => {
+      const apiBase = getApiBaseUrl();
+      const summaryUrl = `${apiBase}/api/v1/summary/market?base=${encodeURIComponent(
+        base
+      )}&quote=${encodeURIComponent(quote)}`;
 
-  try {
-    const res = await fetch(summaryUrl, { cache: "no-store" });
+      try {
+        const res = await fetch(summaryUrl, { cache: "no-store" });
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      return apiError(
-        context,
-        502,
-        "SUMMARY_UPSTREAM_ERROR",
-        `Upstream /summary/market call failed with ${res.status}`,
-        text
-      );
-    }
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          throw new ApiRouteError(
+            502,
+            "SUMMARY_UPSTREAM_ERROR",
+            `Upstream /summary/market call failed with ${res.status}`,
+            text
+          );
+        }
 
-    const rawSummary = await res.json();
-    const summaryCandidate =
-      rawSummary && typeof rawSummary === "object" && "data" in rawSummary
-        ? (rawSummary as { data?: unknown }).data
-        : rawSummary;
+        const rawSummary = await res.json();
+        const summaryCandidate =
+          rawSummary && typeof rawSummary === "object" && "data" in rawSummary
+            ? (rawSummary as { data?: unknown }).data
+            : rawSummary;
 
-    if (!isMarketSummary(summaryCandidate)) {
-      return apiError(
-        context,
-        502,
-        "SUMMARY_UPSTREAM_ERROR",
-        "Upstream /summary/market returned an invalid summary payload."
-      );
-    }
+        if (!isMarketSummary(summaryCandidate)) {
+          throw new ApiRouteError(
+            502,
+            "SUMMARY_UPSTREAM_ERROR",
+            "Upstream /summary/market returned an invalid summary payload."
+          );
+        }
 
-    const summary = summaryCandidate;
-    const insights = buildInsightsFromSummary(summary);
-    const marketHealth = buildMarketHealthFromSummary(summary);
-    const commentary = buildAiCommentaryFromSummary(summary, marketHealth);
+        const summary = summaryCandidate;
+        const insights = buildInsightsFromSummary(summary);
+        const marketHealth = buildMarketHealthFromSummary(summary);
+        const commentary = buildAiCommentaryFromSummary(summary, marketHealth);
 
-    return apiJson(context, {
-      pair: `${summary.quote}/${summary.base}`,
-      base: summary.base,
-      quote: summary.quote,
-      as_of_date: summary.as_of_date,
-      insights,
-      commentary,
-      marketHealth,
-      market_health: marketHealth,
-      meta: {
-        version: "v1",
-        source: "/api/v1/summary/market",
-      },
-    });
-  } catch (error: unknown) {
-    console.error("[FX] /summary/insights error", error);
-    return apiError(context, 500, "SUMMARY_INSIGHTS_ERROR", "Failed to generate FX insights.");
-  }
+        return {
+          pair: `${summary.quote}/${summary.base}`,
+          base: summary.base,
+          quote: summary.quote,
+          as_of_date: summary.as_of_date,
+          insights,
+          commentary,
+          marketHealth,
+          market_health: marketHealth,
+          meta: {
+            version: "v1",
+            source: "/api/v1/summary/market",
+          },
+        };
+      } catch (error: unknown) {
+        if (error instanceof ApiRouteError) throw error;
+        console.error("[FX] /summary/insights error", error);
+        throw new ApiRouteError(500, "SUMMARY_INSIGHTS_ERROR", "Failed to generate FX insights.");
+      }
+    },
+  );
 });

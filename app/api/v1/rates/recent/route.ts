@@ -1,19 +1,19 @@
 // app/api/v1/rates/recent/route.ts
 import { NextRequest } from "next/server";
-import { apiError, apiJson } from "@/lib/api/response";
+import { apiCachedJson, ApiRouteError } from "@/lib/api/cache-response";
+import { apiError } from "@/lib/api/response";
 import { apiOptions, withApiProtection } from "@/lib/api/middleware";
 import {
   isCurrencyCode,
   normalizeCurrencyCode,
   parsePositiveInteger,
 } from "@/lib/api/validation";
+import { CACHE_TAGS } from "@/lib/cache";
 import { supabaseServer } from "@/lib/supabase/server";
-
 
 export const OPTIONS = apiOptions;
 
 export const GET = withApiProtection(async function GET(req: NextRequest, context) {
-  const supabase = supabaseServer;
   const url = new URL(req.url);
 
   const baseCurrency = normalizeCurrencyCode(url.searchParams.get("base"), "SSP");
@@ -33,28 +33,40 @@ export const GET = withApiProtection(async function GET(req: NextRequest, contex
     return apiError(context, 400, "INVALID_CURRENCY", "quote must be a valid 3-letter currency code.");
   }
 
-  let query = supabase
-    .from("fx_daily_rates")
-    .select(
-      "id, as_of_date, base_currency, quote_currency, rate_mid, is_official, is_manual_override, source_id"
-    )
-    .eq("base_currency", baseCurrency)
-    .order("as_of_date", { ascending: false })
-    .order("quote_currency", { ascending: true })
-    .limit(limit);
+  return apiCachedJson(
+    req,
+    context,
+    {
+      namespace: "api:v1:rates:recent",
+      ttlSeconds: 60,
+      tags: [CACHE_TAGS.rates],
+      varyBy: { base: baseCurrency, quote: quoteFilter, limit },
+    },
+    async () => {
+      let query = supabaseServer
+        .from("fx_daily_rates")
+        .select(
+          "id, as_of_date, base_currency, quote_currency, rate_mid, is_official, is_manual_override, source_id"
+        )
+        .eq("base_currency", baseCurrency)
+        .order("as_of_date", { ascending: false })
+        .order("quote_currency", { ascending: true })
+        .limit(limit);
 
-  if (quoteFilter) {
-    query = query.eq("quote_currency", quoteFilter);
-  }
+      if (quoteFilter) {
+        query = query.eq("quote_currency", quoteFilter);
+      }
 
-  const { data, error } = await query;
+      const { data, error } = await query;
 
-  if (error) {
-    return apiError(context, 500, "DB_ERROR", error.message);
-  }
+      if (error) {
+        throw new ApiRouteError(500, "DB_ERROR", error.message);
+      }
 
-  return apiJson(context, {
-    data: data ?? [],
-    meta: { limit, base: baseCurrency, quote: quoteFilter },
-  });
+      return {
+        data: data ?? [],
+        meta: { limit, base: baseCurrency, quote: quoteFilter },
+      };
+    },
+  );
 });

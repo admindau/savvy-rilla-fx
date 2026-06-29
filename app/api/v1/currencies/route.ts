@@ -1,38 +1,48 @@
 // app/api/v1/currencies/route.ts
 import { NextRequest } from "next/server";
-import { apiError, apiJson } from "@/lib/api/response";
+import { apiCachedJson, ApiRouteError } from "@/lib/api/cache-response";
 import { apiOptions, withApiProtection } from "@/lib/api/middleware";
+import { CACHE_TAGS } from "@/lib/cache";
 import { supabaseServer } from "@/lib/supabase/server";
-
 
 export const OPTIONS = apiOptions;
 
 export const GET = withApiProtection(async function GET(req: NextRequest, context) {
-  const supabase = supabaseServer;
   const url = new URL(req.url);
 
   const search = url.searchParams.get("search")?.trim() ?? "";
   const activeParam = url.searchParams.get("active");
   const activeOnly = activeParam === null ? true : activeParam === "true";
 
-  let query = supabase
-    .from("currencies")
-    .select("code, name, symbol, decimals, created_at", { count: "exact" });
+  return apiCachedJson(
+    req,
+    context,
+    {
+      namespace: "api:v1:currencies",
+      ttlSeconds: 86_400,
+      tags: [CACHE_TAGS.currencies],
+    },
+    async () => {
+      let query = supabaseServer
+        .from("currencies")
+        .select("code, name, symbol, decimals, created_at", { count: "exact" });
 
-  if (search) {
-    query = query.or(`code.ilike.%${search}%,name.ilike.%${search}%`);
-  }
+      if (search) {
+        query = query.or(`code.ilike.%${search}%,name.ilike.%${search}%`);
+      }
 
-  const { data, error, count } = await query.order("code", {
-    ascending: true,
-  });
+      const { data, error, count } = await query.order("code", {
+        ascending: true,
+      });
 
-  if (error) {
-    return apiError(context, 500, "DB_ERROR", error.message);
-  }
+      if (error) {
+        throw new ApiRouteError(500, "DB_ERROR", error.message);
+      }
 
-  return apiJson(context, {
-    data: data ?? [],
-    meta: { count: count ?? data?.length ?? 0, activeOnly, search },
-  });
+      return {
+        data: data ?? [],
+        meta: { count: count ?? data?.length ?? 0, activeOnly, search },
+      };
+    },
+  );
 });

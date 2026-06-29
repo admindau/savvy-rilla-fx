@@ -29,6 +29,7 @@ export function apiJson<T extends Record<string, unknown>>(
     status?: number;
     cache?: ApiCacheMode;
     cacheSeconds?: number;
+    headers?: Record<string, string>;
   }
 ) {
   const status = options?.status ?? 200;
@@ -46,10 +47,13 @@ export function apiJson<T extends Record<string, unknown>>(
     },
     {
       status,
-      headers: buildApiHeaders(context, {
-        cache: options?.cache,
-        cacheSeconds: options?.cacheSeconds,
-      }),
+      headers: {
+        ...buildApiHeaders(context, {
+          cache: options?.cache,
+          cacheSeconds: options?.cacheSeconds,
+        }),
+        ...(options?.headers ?? {}),
+      },
     }
   );
 }

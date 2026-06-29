@@ -1,10 +1,11 @@
 // app/api/v1/rates/latest/route.ts
 import { NextRequest } from "next/server";
-import { apiError, apiJson } from "@/lib/api/response";
+import { apiCachedJson, ApiRouteError } from "@/lib/api/cache-response";
+import { apiError } from "@/lib/api/response";
 import { apiOptions, withApiProtection } from "@/lib/api/middleware";
 import { isCurrencyCode, normalizeCurrencyCode } from "@/lib/api/validation";
+import { CACHE_TAGS } from "@/lib/cache";
 import { supabaseServer } from "@/lib/supabase/server";
-
 
 export const OPTIONS = apiOptions;
 
@@ -21,7 +22,6 @@ type LiveRateRow = {
 };
 
 export const GET = withApiProtection(async function GET(req: NextRequest, context) {
-  const supabase = supabaseServer;
   const url = new URL(req.url);
   const baseCurrency = normalizeCurrencyCode(url.searchParams.get("base"), "SSP");
 
@@ -34,97 +34,108 @@ export const GET = withApiProtection(async function GET(req: NextRequest, contex
     );
   }
 
-  const { data: latestDateRow, error: latestDateError } = await supabase
-    .from("fx_daily_rates")
-    .select("as_of_date")
-    .eq("base_currency", baseCurrency)
-    .order("as_of_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  return apiCachedJson(
+    req,
+    context,
+    {
+      namespace: "api:v1:rates:latest",
+      ttlSeconds: 30,
+      tags: [CACHE_TAGS.rates],
+      varyBy: { base: baseCurrency },
+    },
+    async () => {
+      const { data: latestDateRow, error: latestDateError } = await supabaseServer
+        .from("fx_daily_rates")
+        .select("as_of_date")
+        .eq("base_currency", baseCurrency)
+        .order("as_of_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-  if (latestDateError) {
-    return apiError(context, 500, "DB_ERROR", latestDateError.message);
-  }
+      if (latestDateError) {
+        throw new ApiRouteError(500, "DB_ERROR", latestDateError.message);
+      }
 
-  let asOfDate = latestDateRow?.as_of_date as string | null;
+      let asOfDate = latestDateRow?.as_of_date as string | null;
 
-  let liveRates: LiveRateRow[] = [];
-  if (asOfDate) {
-    const { data, error } = await supabase
-      .from("fx_daily_rates")
-      .select(
-        "as_of_date, base_currency, quote_currency, rate_mid, is_official, is_manual_override, source_id"
-      )
-      .eq("base_currency", baseCurrency)
-      .eq("as_of_date", asOfDate)
-      .order("quote_currency", { ascending: true });
+      let liveRates: LiveRateRow[] = [];
+      if (asOfDate) {
+        const { data, error } = await supabaseServer
+          .from("fx_daily_rates")
+          .select(
+            "as_of_date, base_currency, quote_currency, rate_mid, is_official, is_manual_override, source_id"
+          )
+          .eq("base_currency", baseCurrency)
+          .eq("as_of_date", asOfDate)
+          .order("quote_currency", { ascending: true });
 
-    if (error) {
-      return apiError(context, 500, "DB_ERROR", error.message);
-    }
+        if (error) {
+          throw new ApiRouteError(500, "DB_ERROR", error.message);
+        }
 
-    liveRates = (data ?? []) as LiveRateRow[];
-  }
+        liveRates = (data ?? []) as LiveRateRow[];
+      }
 
-  if (!asOfDate || liveRates.length === 0) {
-    const { data: defaultDateRow, error: defaultDateError } = await supabase
-      .from("fx_daily_rates_default")
-      .select("as_of_date")
-      .eq("base_currency", baseCurrency)
-      .order("as_of_date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      if (!asOfDate || liveRates.length === 0) {
+        const { data: defaultDateRow, error: defaultDateError } = await supabaseServer
+          .from("fx_daily_rates_default")
+          .select("as_of_date")
+          .eq("base_currency", baseCurrency)
+          .order("as_of_date", { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-    if (defaultDateError) {
-      return apiError(context, 500, "DB_ERROR", defaultDateError.message);
-    }
+        if (defaultDateError) {
+          throw new ApiRouteError(500, "DB_ERROR", defaultDateError.message);
+        }
 
-    asOfDate = defaultDateRow?.as_of_date as string | null;
+        asOfDate = defaultDateRow?.as_of_date as string | null;
 
-    if (!asOfDate) {
-      return apiError(
-        context,
-        404,
-        "NO_DATA",
-        `No FX data found for base currency ${baseCurrency}.`
-      );
-    }
+        if (!asOfDate) {
+          throw new ApiRouteError(
+            404,
+            "NO_DATA",
+            `No FX data found for base currency ${baseCurrency}.`
+          );
+        }
 
-    const { data, error } = await supabase
-      .from("fx_daily_rates_default")
-      .select(
-        "as_of_date, base_currency, quote_currency, rate_mid, is_official, is_manual_override, source_code, source_label"
-      )
-      .eq("base_currency", baseCurrency)
-      .eq("as_of_date", asOfDate)
-      .order("quote_currency", { ascending: true });
+        const { data, error } = await supabaseServer
+          .from("fx_daily_rates_default")
+          .select(
+            "as_of_date, base_currency, quote_currency, rate_mid, is_official, is_manual_override, source_code, source_label"
+          )
+          .eq("base_currency", baseCurrency)
+          .eq("as_of_date", asOfDate)
+          .order("quote_currency", { ascending: true });
 
-    if (error) {
-      return apiError(context, 500, "DB_ERROR", error.message);
-    }
+        if (error) {
+          throw new ApiRouteError(500, "DB_ERROR", error.message);
+        }
 
-    const rates: Record<string, number> = {};
-    for (const row of data ?? []) {
-      rates[row.quote_currency] = Number(row.rate_mid);
-    }
+        const rates: Record<string, number> = {};
+        for (const row of data ?? []) {
+          rates[row.quote_currency] = Number(row.rate_mid);
+        }
 
-    return apiJson(context, {
-      base: baseCurrency,
-      as_of_date: asOfDate,
-      source: "fx_daily_rates_default",
-      rates,
-    });
-  }
+        return {
+          base: baseCurrency,
+          as_of_date: asOfDate,
+          source: "fx_daily_rates_default",
+          rates,
+        };
+      }
 
-  const rates: Record<string, number> = {};
-  for (const row of liveRates) {
-    rates[row.quote_currency] = Number(row.rate_mid);
-  }
+      const rates: Record<string, number> = {};
+      for (const row of liveRates) {
+        rates[row.quote_currency] = Number(row.rate_mid);
+      }
 
-  return apiJson(context, {
-    base: baseCurrency,
-    as_of_date: asOfDate,
-    source: "fx_daily_rates",
-    rates,
-  });
+      return {
+        base: baseCurrency,
+        as_of_date: asOfDate,
+        source: "fx_daily_rates",
+        rates,
+      };
+    },
+  );
 });

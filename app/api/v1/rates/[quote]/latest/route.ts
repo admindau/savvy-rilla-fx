@@ -1,10 +1,11 @@
 // app/api/v1/rates/[quote]/latest/route.ts
 import { NextRequest } from "next/server";
-import { apiError, apiJson } from "@/lib/api/response";
+import { apiCachedJson, ApiRouteError } from "@/lib/api/cache-response";
+import { apiError } from "@/lib/api/response";
 import { apiOptions, withApiProtection, type RouteContext } from "@/lib/api/middleware";
 import { isCurrencyCode, normalizeCurrencyCode } from "@/lib/api/validation";
+import { CACHE_TAGS } from "@/lib/cache";
 import { supabaseServer } from "@/lib/supabase/server";
-
 
 export const OPTIONS = apiOptions;
 
@@ -13,7 +14,6 @@ export const GET = withApiProtection(async function GET(
   context,
   routeContext?: RouteContext,
 ) {
-  const supabase = supabaseServer;
   const url = new URL(req.url);
   const baseCurrency = normalizeCurrencyCode(url.searchParams.get("base"), "SSP");
 
@@ -30,57 +30,68 @@ export const GET = withApiProtection(async function GET(
     );
   }
 
-  const { data: latestRow, error } = await supabase
-    .from("fx_daily_rates")
-    .select(
-      "as_of_date, base_currency, quote_currency, rate_mid, is_official, is_manual_override, source_id"
-    )
-    .eq("base_currency", baseCurrency)
-    .eq("quote_currency", quoteCurrency)
-    .order("as_of_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  return apiCachedJson(
+    req,
+    context,
+    {
+      namespace: "api:v1:rates:quote-latest",
+      ttlSeconds: 30,
+      tags: [CACHE_TAGS.rates],
+      varyBy: { base: baseCurrency, quote: quoteCurrency },
+    },
+    async () => {
+      const { data: latestRow, error } = await supabaseServer
+        .from("fx_daily_rates")
+        .select(
+          "as_of_date, base_currency, quote_currency, rate_mid, is_official, is_manual_override, source_id"
+        )
+        .eq("base_currency", baseCurrency)
+        .eq("quote_currency", quoteCurrency)
+        .order("as_of_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-  if (error) {
-    return apiError(context, 500, "DB_ERROR", error.message);
-  }
+      if (error) {
+        throw new ApiRouteError(500, "DB_ERROR", error.message);
+      }
 
-  if (!latestRow) {
-    return apiError(
-      context,
-      404,
-      "NO_DATA",
-      `No FX data found for pair ${baseCurrency}/${quoteCurrency}.`
-    );
-  }
+      if (!latestRow) {
+        throw new ApiRouteError(
+          404,
+          "NO_DATA",
+          `No FX data found for pair ${baseCurrency}/${quoteCurrency}.`
+        );
+      }
 
-  const { data: prevRow } = await supabase
-    .from("fx_daily_rates")
-    .select("rate_mid, as_of_date")
-    .eq("base_currency", baseCurrency)
-    .eq("quote_currency", quoteCurrency)
-    .lt("as_of_date", latestRow.as_of_date)
-    .order("as_of_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+      const { data: prevRow } = await supabaseServer
+        .from("fx_daily_rates")
+        .select("rate_mid, as_of_date")
+        .eq("base_currency", baseCurrency)
+        .eq("quote_currency", quoteCurrency)
+        .lt("as_of_date", latestRow.as_of_date)
+        .order("as_of_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-  const latestMid = Number(latestRow.rate_mid);
-  const prevMid = prevRow ? Number(prevRow.rate_mid) : null;
+      const latestMid = Number(latestRow.rate_mid);
+      const prevMid = prevRow ? Number(prevRow.rate_mid) : null;
 
-  let changePct: number | null = null;
-  if (prevMid && prevMid !== 0) {
-    changePct = ((latestMid - prevMid) / prevMid) * 100;
-  }
+      let changePct: number | null = null;
+      if (prevMid && prevMid !== 0) {
+        changePct = ((latestMid - prevMid) / prevMid) * 100;
+      }
 
-  return apiJson(context, {
-    pair: `${baseCurrency}/${quoteCurrency}`,
-    base: baseCurrency,
-    quote: quoteCurrency,
-    as_of_date: latestRow.as_of_date,
-    mid_rate: latestMid,
-    change_pct_vs_previous: changePct,
-    is_official: latestRow.is_official,
-    is_manual_override: latestRow.is_manual_override,
-    source_id: latestRow.source_id,
-  });
+      return {
+        pair: `${baseCurrency}/${quoteCurrency}`,
+        base: baseCurrency,
+        quote: quoteCurrency,
+        as_of_date: latestRow.as_of_date,
+        mid_rate: latestMid,
+        change_pct_vs_previous: changePct,
+        is_official: latestRow.is_official,
+        is_manual_override: latestRow.is_manual_override,
+        source_id: latestRow.source_id,
+      };
+    },
+  );
 });

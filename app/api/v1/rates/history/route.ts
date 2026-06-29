@@ -1,7 +1,8 @@
 // app/api/v1/rates/history/route.ts
 import { NextRequest } from "next/server";
 import type { ApiContext } from "@/lib/api/request-id";
-import { apiError, apiJson } from "@/lib/api/response";
+import { apiCachedJson, ApiRouteError } from "@/lib/api/cache-response";
+import { apiError } from "@/lib/api/response";
 import { apiOptions, withApiProtection } from "@/lib/api/middleware";
 import {
   isCurrencyCode,
@@ -9,12 +10,12 @@ import {
   normalizeCurrencyCode,
   parsePositiveInteger,
 } from "@/lib/api/validation";
+import { CACHE_TAGS } from "@/lib/cache";
 import { supabaseServer } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export const OPTIONS = apiOptions;
-
 
 type FxDailyRow = {
   as_of_date: string;
@@ -123,84 +124,98 @@ export const GET = withApiProtection(async function GET(req: NextRequest, contex
     max: HARD_MAX_LIMIT,
   });
 
-  if (mode === "all") {
-    const result = await fetchAllHistory({ base, quote, limit });
-
-    if (!result.ok) {
-      return apiError(context, 500, "DB_ERROR", "Failed to load FX history.", result.error.message);
-    }
-
-    const points = result.points;
-    const metaFrom = points.length > 0 ? points[0].date : "";
-    const metaTo = points.length > 0 ? points[points.length - 1].date : "";
-
-    return apiJson(context, {
-      pair: `${base}/${quote}`,
-      base,
-      quote,
-      points,
-      meta: {
-        from: metaFrom,
-        to: metaTo,
-        count: points.length,
-        truncated: result.truncated,
-      },
-    });
-  }
-
   let from = fromParam ?? null;
   let to = toParam ?? null;
 
-  if (daysParam && !from && !to) {
-    const days = Number(daysParam);
-    if (!Number.isFinite(days) || days <= 0) {
-      return apiError(context, 400, "INVALID_PARAMETER", "days must be a positive integer.");
+  if (mode !== "all") {
+    if (daysParam && !from && !to) {
+      const days = Number(daysParam);
+      if (!Number.isFinite(days) || days <= 0) {
+        return apiError(context, 400, "INVALID_PARAMETER", "days must be a positive integer.");
+      }
+      const today = new Date();
+      const start = new Date(today);
+      start.setDate(today.getDate() - Math.floor(days) + 1);
+      from = start.toISOString().slice(0, 10);
+      to = today.toISOString().slice(0, 10);
     }
-    const today = new Date();
-    const start = new Date(today);
-    start.setDate(today.getDate() - Math.floor(days) + 1);
-    from = start.toISOString().slice(0, 10);
-    to = today.toISOString().slice(0, 10);
+
+    if (!from || !to) {
+      const today = new Date();
+      const start = new Date(today);
+      start.setDate(today.getDate() - 365 + 1);
+      from = start.toISOString().slice(0, 10);
+      to = today.toISOString().slice(0, 10);
+    }
+
+    const dateRangeError = validateDateRange(context, from, to);
+    if (dateRangeError) return dateRangeError;
   }
 
-  if (!from || !to) {
-    const today = new Date();
-    const start = new Date(today);
-    start.setDate(today.getDate() - 365 + 1);
-    from = start.toISOString().slice(0, 10);
-    to = today.toISOString().slice(0, 10);
-  }
+  return apiCachedJson(
+    req,
+    context,
+    {
+      namespace: "api:v1:rates:history",
+      ttlSeconds: 300,
+      tags: [CACHE_TAGS.rates],
+      varyBy: { base, quote, mode, from, to, limit },
+    },
+    async () => {
+      if (mode === "all") {
+        const result = await fetchAllHistory({ base, quote, limit });
 
-  const dateRangeError = validateDateRange(context, from, to);
-  if (dateRangeError) return dateRangeError;
+        if (!result.ok) {
+          throw new ApiRouteError(500, "DB_ERROR", "Failed to load FX history.", result.error.message);
+        }
 
-  const { data, error } = await supabaseServer
-    .from("fx_daily_rates")
-    .select("as_of_date, rate_mid")
-    .eq("base_currency", base)
-    .eq("quote_currency", quote)
-    .gte("as_of_date", from)
-    .lte("as_of_date", to)
-    .order("as_of_date", { ascending: true });
+        const points = result.points;
+        const metaFrom = points.length > 0 ? points[0].date : "";
+        const metaTo = points.length > 0 ? points[points.length - 1].date : "";
 
-  if (error) {
-    return apiError(context, 500, "DB_ERROR", "Failed to load FX history.", error.message);
-  }
+        return {
+          pair: `${base}/${quote}`,
+          base,
+          quote,
+          points,
+          meta: {
+            from: metaFrom,
+            to: metaTo,
+            count: points.length,
+            truncated: result.truncated,
+          },
+        };
+      }
 
-  const points: FxChartPoint[] =
-    (data ?? [])
-      .map((row: FxDailyRow) => {
-        const mid = toNumber(row.rate_mid);
-        if (mid == null) return null;
-        return { date: row.as_of_date, mid };
-      })
-      .filter((p): p is FxChartPoint => p !== null) ?? [];
+      const { data, error } = await supabaseServer
+        .from("fx_daily_rates")
+        .select("as_of_date, rate_mid")
+        .eq("base_currency", base)
+        .eq("quote_currency", quote)
+        .gte("as_of_date", from)
+        .lte("as_of_date", to)
+        .order("as_of_date", { ascending: true });
 
-  return apiJson(context, {
-    pair: `${base}/${quote}`,
-    base,
-    quote,
-    points,
-    meta: { from, to, count: points.length },
-  });
+      if (error) {
+        throw new ApiRouteError(500, "DB_ERROR", "Failed to load FX history.", error.message);
+      }
+
+      const points: FxChartPoint[] =
+        (data ?? [])
+          .map((row: FxDailyRow) => {
+            const mid = toNumber(row.rate_mid);
+            if (mid == null) return null;
+            return { date: row.as_of_date, mid };
+          })
+          .filter((p): p is FxChartPoint => p !== null) ?? [];
+
+      return {
+        pair: `${base}/${quote}`,
+        base,
+        quote,
+        points,
+        meta: { from, to, count: points.length },
+      };
+    },
+  );
 });
