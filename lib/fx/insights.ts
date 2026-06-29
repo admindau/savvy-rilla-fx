@@ -21,6 +21,17 @@ export type MarketSummary = {
   };
 };
 
+export type MarketHealth = {
+  score: number;
+  label: "Stable" | "Watch" | "Volatile" | "Thin Data";
+  tone: "positive" | "neutral" | "warning";
+  drivers: string[];
+};
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
 function formatPair(summary: MarketSummary) {
   // For SSP markets we want "USD/SSP" style
   return `${summary.quote}/${summary.base}`;
@@ -29,6 +40,126 @@ function formatPair(summary: MarketSummary) {
 function formatPct(value: number, digits = 2) {
   const sign = value >= 0 ? "+" : "";
   return `${sign}${value.toFixed(digits)}%`;
+}
+
+function classifyVolatility(avgDailyMovePct: number | null) {
+  if (avgDailyMovePct === null || Number.isNaN(avgDailyMovePct)) {
+    return "unknown" as const;
+  }
+
+  const vol = Math.abs(avgDailyMovePct);
+  if (vol < 0.1) return "very low" as const;
+  if (vol < 0.3) return "low" as const;
+  if (vol < 0.7) return "elevated" as const;
+  return "high" as const;
+}
+
+export function buildMarketHealthFromSummary(
+  summary: MarketSummary | null
+): MarketHealth {
+  if (!summary || !summary.mid_rate || summary.mid_rate <= 0) {
+    return {
+      score: 50,
+      label: "Thin Data",
+      tone: "neutral",
+      drivers: [
+        "Not enough market data is available to calculate a confident signal.",
+      ],
+    };
+  }
+
+  const drivers: string[] = [];
+  let score = 82;
+
+  const dailyChange = summary.change_pct_vs_previous;
+  if (dailyChange === null || Number.isNaN(dailyChange)) {
+    score -= 8;
+    drivers.push("Previous-day movement is not yet available.");
+  } else {
+    const absDaily = Math.abs(dailyChange);
+    if (absDaily < 0.1) {
+      score += 4;
+      drivers.push("Daily movement is minimal, supporting a stable reading.");
+    } else if (absDaily < 0.5) {
+      score -= 3;
+      drivers.push("Daily movement is moderate and worth monitoring.");
+    } else {
+      score -= 12;
+      drivers.push("Daily movement is elevated versus the previous fixing.");
+    }
+  }
+
+  const rangeHigh = summary.range?.high ?? 0;
+  const rangeLow = summary.range?.low ?? 0;
+  if (rangeHigh > 0 && rangeLow > 0 && rangeHigh >= rangeLow) {
+    const rangePct = ((rangeHigh - rangeLow) / summary.mid_rate) * 100;
+    if (rangePct < 1) {
+      score += 6;
+      drivers.push("The recent trading range remains tight.");
+    } else if (rangePct < 3) {
+      score -= 2;
+      drivers.push("The recent trading range is moderate.");
+    } else {
+      score -= 10;
+      drivers.push("The recent trading range is wide for this market.");
+    }
+  } else {
+    score -= 6;
+    drivers.push("Range data is incomplete for the selected window.");
+  }
+
+  const volatilityLabel = classifyVolatility(
+    summary.volatility?.avg_daily_move_pct ?? null
+  );
+  if (volatilityLabel === "very low" || volatilityLabel === "low") {
+    score += 5;
+    drivers.push(`Average daily volatility is ${volatilityLabel}.`);
+  } else if (volatilityLabel === "elevated") {
+    score -= 8;
+    drivers.push("Average daily volatility is elevated.");
+  } else if (volatilityLabel === "high") {
+    score -= 16;
+    drivers.push("Average daily volatility is high.");
+  } else {
+    score -= 5;
+    drivers.push("Volatility data is not yet available.");
+  }
+
+  const trendLabel = summary.trend?.label ?? "Range-Bound";
+  if (trendLabel.toLowerCase().includes("range")) {
+    score += 3;
+    drivers.push("Trend signal remains range-bound.");
+  } else {
+    score -= 4;
+    drivers.push(`Trend signal currently reads ${trendLabel}.`);
+  }
+
+  const finalScore = Math.round(clamp(score, 0, 100));
+
+  if (finalScore >= 75) {
+    return {
+      score: finalScore,
+      label: "Stable",
+      tone: "positive",
+      drivers: drivers.slice(0, 3),
+    };
+  }
+
+  if (finalScore >= 55) {
+    return {
+      score: finalScore,
+      label: "Watch",
+      tone: "neutral",
+      drivers: drivers.slice(0, 3),
+    };
+  }
+
+  return {
+    score: finalScore,
+    label: "Volatile",
+    tone: "warning",
+    drivers: drivers.slice(0, 3),
+  };
 }
 
 export function buildInsightsFromSummary(summary: MarketSummary): string[] {
@@ -79,18 +210,12 @@ export function buildInsightsFromSummary(summary: MarketSummary): string[] {
   // 3) Volatility
   const { avg_daily_move_pct, window_days: volWindow } = summary.volatility;
   if (avg_daily_move_pct !== null) {
-    const absVol = Math.abs(avg_daily_move_pct);
-    let descriptor: string;
-
-    if (absVol < 0.10) descriptor = "very low";
-    else if (absVol < 0.30) descriptor = "low";
-    else if (absVol < 0.70) descriptor = "elevated";
-    else descriptor = "high";
+    const volatilityLabel = classifyVolatility(avg_daily_move_pct);
 
     insights.push(
       `Average daily move over the last ${volWindow} days is ${formatPct(
         avg_daily_move_pct
-      )}, indicating ${descriptor} volatility.`
+      )}, indicating ${volatilityLabel} volatility.`
     );
   }
 

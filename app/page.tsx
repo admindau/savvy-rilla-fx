@@ -5,6 +5,7 @@ import FxHistoryChart from "@/components/fx-history-chart";
 import FxMultiCurrencyMarketSnapshot from "@/components/fx-multicurrency-market-snapshot";
 import {
   buildInsightsFromSummary,
+  buildMarketHealthFromSummary,
   type MarketSummary,
 } from "@/lib/fx/insights";
 
@@ -216,6 +217,7 @@ export default async function HomePage() {
       : [];
 
   const fxInsights = usdSummary ? buildInsightsFromSummary(usdSummary) : [];
+  const marketHealth = buildMarketHealthFromSummary(usdSummary);
 
   // If "all" history is missing or super short, fall back to 365d series
   const allHistoryPoints =
@@ -361,6 +363,50 @@ export default async function HomePage() {
               </span>
             </div>
 
+            <div className="rounded-xl border border-zinc-800 bg-black/35 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
+                    Market health
+                  </p>
+                  <div className="mt-1 flex items-baseline gap-2">
+                    <p className="text-3xl font-semibold tracking-tight">
+                      {marketHealth.score}
+                    </p>
+                    <p className="text-xs text-zinc-500">/ 100</p>
+                  </div>
+                </div>
+                <span
+                  className={
+                    marketHealth.tone === "positive"
+                      ? "rounded-full bg-emerald-500/10 px-3 py-1 text-[0.7rem] font-medium text-emerald-400"
+                      : marketHealth.tone === "warning"
+                      ? "rounded-full bg-amber-500/10 px-3 py-1 text-[0.7rem] font-medium text-amber-300"
+                      : "rounded-full bg-zinc-800 px-3 py-1 text-[0.7rem] font-medium text-zinc-300"
+                  }
+                >
+                  {marketHealth.label}
+                </span>
+              </div>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-900">
+                <div
+                  className={
+                    marketHealth.tone === "positive"
+                      ? "h-full rounded-full bg-emerald-400"
+                      : marketHealth.tone === "warning"
+                      ? "h-full rounded-full bg-amber-300"
+                      : "h-full rounded-full bg-zinc-400"
+                  }
+                  style={{ width: `${marketHealth.score}%` }}
+                />
+              </div>
+              <p className="mt-2 text-[0.7rem] leading-relaxed text-zinc-500">
+                Derived from daily movement, recent range, volatility, and trend
+                consistency. This is an experimental Savvy Rilla intelligence
+                signal, not financial advice.
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-4 border-y border-zinc-800 py-4">
               <div className="space-y-1">
                 <p className="text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
@@ -428,6 +474,20 @@ export default async function HomePage() {
             {/* Existing history chart (UNCHANGED) */}
             {historySeries.length > 0 && <FxHistoryChart series={historySeries} />}
 
+            <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3 text-xs">
+              <p className="mb-2 text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
+                Health drivers
+              </p>
+              <ul className="space-y-1.5 text-[0.75rem] text-zinc-300">
+                {marketHealth.drivers.map((driver) => (
+                  <li key={driver} className="flex gap-2">
+                    <span className="mt-[6px] h-1 w-1 rounded-full bg-zinc-500" />
+                    <span>{driver}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
             <p className="text-[0.7rem] text-zinc-500">
               Snapshot powered by{" "}
               <code className="rounded bg-zinc-900 px-1 py-0.5 text-[0.7rem]">
@@ -494,6 +554,86 @@ export default async function HomePage() {
                 </div>
               </>
             )}
+          </div>
+        </section>
+
+        {/* Market Intelligence Center */}
+        <section className="space-y-3 rounded-2xl border border-zinc-800 bg-zinc-950/50 p-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-[0.7rem] uppercase tracking-[0.25em] text-zinc-500">
+                Market intelligence center
+              </p>
+              <h2 className="text-xl font-semibold tracking-tight">
+                USD/SSP signal summary
+              </h2>
+              <p className="mt-1 max-w-2xl text-sm text-zinc-400">
+                A compact interpretation layer built from the same read-only FX
+                API. It turns raw rate records into market health, trend,
+                volatility, and movement signals.
+              </p>
+            </div>
+            <div className="rounded-full border border-zinc-800 bg-black px-3 py-1 text-[0.7rem] text-zinc-400">
+              Experimental intelligence · v1 data
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border border-zinc-800 bg-black/40 p-4">
+              <p className="text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
+                Health score
+              </p>
+              <p className="mt-2 text-2xl font-semibold">
+                {marketHealth.score}/100
+              </p>
+              <p className="mt-1 text-xs text-zinc-500">{marketHealth.label}</p>
+            </div>
+
+            <div className="rounded-xl border border-zinc-800 bg-black/40 p-4">
+              <p className="text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
+                Trend
+              </p>
+              <p className="mt-2 text-lg font-semibold">
+                {usdSummary?.trend?.label ?? "Range-Bound"}
+              </p>
+              <p className="mt-1 text-xs text-zinc-500">
+                {usdSummary?.trend?.window_days ?? 3}-day signal
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-zinc-800 bg-black/40 p-4">
+              <p className="text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
+                Volatility
+              </p>
+              <p className="mt-2 text-lg font-semibold">
+                {usdSummary?.volatility?.avg_daily_move_pct == null
+                  ? "—"
+                  : `${usdSummary.volatility.avg_daily_move_pct.toFixed(2)}%`}
+              </p>
+              <p className="mt-1 text-xs text-zinc-500">Avg daily move</p>
+            </div>
+
+            <div className="rounded-xl border border-zinc-800 bg-black/40 p-4">
+              <p className="text-[0.65rem] uppercase tracking-[0.2em] text-zinc-500">
+                Latest move
+              </p>
+              <p
+                className={
+                  usdChangePct == null
+                    ? "mt-2 text-lg font-semibold text-zinc-200"
+                    : usdChangePct >= 0
+                    ? "mt-2 text-lg font-semibold text-emerald-400"
+                    : "mt-2 text-lg font-semibold text-red-400"
+                }
+              >
+                {usdChangePct == null
+                  ? "—"
+                  : `${usdChangePct >= 0 ? "+" : ""}${usdChangePct.toFixed(
+                      2
+                    )}%`}
+              </p>
+              <p className="mt-1 text-xs text-zinc-500">vs previous fixing</p>
+            </div>
           </div>
         </section>
 
