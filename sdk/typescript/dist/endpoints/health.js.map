@@ -1,0 +1,1 @@
+{"version":3,"file":"health.js","sourceRoot":"","sources":["../../src/endpoints/health.ts"],"names":[],"mappings":"AAGA,MAAM,OAAO,cAAc;IACI;IAA7B,YAA6B,IAAgB;QAAhB,SAAI,GAAJ,IAAI,CAAY;IAAG,CAAC;IAEjD,KAAK;QACH,OAAO,IAAI,CAAC,IAAI,CAAC,GAAG,CAAC,aAAa,CAAC,CAAC;IACtC,CAAC;CACF"}
