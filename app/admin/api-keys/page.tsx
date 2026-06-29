@@ -165,6 +165,12 @@ export default function AdminApiKeysPage() {
                 Create, monitor, and revoke developer keys for the Savvy Rilla FX API.
                 Keys are stored as hashes and the full secret is shown only once.
               </p>
+              <a
+                href="/admin/api-usage"
+                className="mt-4 inline-flex rounded-full border border-white/10 px-4 py-2 text-sm text-white/70 transition hover:border-white/30 hover:text-white"
+              >
+                View usage analytics
+              </a>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-4 text-sm">
               <p className="text-white/50">Active keys</p>
