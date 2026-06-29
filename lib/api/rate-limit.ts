@@ -12,7 +12,7 @@ const buckets = new Map<string, RateLimitBucket>();
 const DEFAULT_LIMIT = 120;
 const DEFAULT_WINDOW_MS = 60_000;
 
-function getLimit(): number {
+function getDefaultLimit(): number {
   const parsed = Number.parseInt(process.env.FX_API_RATE_LIMIT ?? "", 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_LIMIT;
 }
@@ -22,10 +22,23 @@ function getWindowMs(): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_WINDOW_MS;
 }
 
+function getLimit(context: ApiContext): number {
+  return context.apiKey?.rateLimitPerMinute ?? getDefaultLimit();
+}
+
 function getRateLimitKey(req: NextRequest, context: ApiContext): string {
-  const apiKey = req.headers.get("x-api-key")?.trim();
-  if (apiKey) return `key:${apiKey}`;
+  if (context.apiKey?.id) return `api-key:${context.apiKey.id}`;
+
+  const apiKey = req.headers.get("x-api-key")?.trim() || getBearerToken(req);
+  if (apiKey) return `raw-key:${apiKey.slice(0, 18)}`;
+
   return `ip:${context.ip ?? "unknown"}`;
+}
+
+function getBearerToken(req: NextRequest): string | null {
+  const authorization = req.headers.get("authorization")?.trim();
+  if (!authorization?.toLowerCase().startsWith("bearer ")) return null;
+  return authorization.slice(7).trim() || null;
 }
 
 function pruneExpiredBuckets(now: number): void {
@@ -37,7 +50,7 @@ function pruneExpiredBuckets(now: number): void {
 }
 
 export function applyRateLimit(req: NextRequest, context: ApiContext): NextResponse | null {
-  const limit = getLimit();
+  const limit = getLimit(context);
   const windowMs = getWindowMs();
   const now = Date.now();
   const key = getRateLimitKey(req, context);
@@ -82,6 +95,6 @@ export function applyRateLimit(req: NextRequest, context: ApiContext): NextRespo
         ...buildApiHeaders(context),
         "Retry-After": String(resetSeconds),
       },
-    }
+    },
   );
 }

@@ -21,6 +21,8 @@ type Endpoint = {
   sampleResponse: string;
 };
 
+const EXAMPLE_API_KEY = "srfx_test_xxxxxxxxxxxxxxxxxxxxxxxxx";
+
 const BASE_URL = "https://fx.savvyrilla.tech";
 const API_BASE = `${BASE_URL}/api/v1`;
 
@@ -365,11 +367,13 @@ function buildSnippet(endpoint: Endpoint, language: CodeLanguage): string {
   switch (language) {
     case "curl":
       return `curl -X GET "${url}" \\
-  -H "Accept: application/json"`;
+  -H "Accept: application/json" \\
+  -H "X-API-Key: ${EXAMPLE_API_KEY}"`;
     case "javascript":
       return `const response = await fetch("${url}", {
   headers: {
     Accept: "application/json",
+    "X-API-Key": "srfx_live_your_api_key",
   },
 });
 
@@ -380,14 +384,22 @@ console.log(data);`;
 
 response = requests.get(
     "${url}",
-    headers={"Accept": "application/json"},
+    headers={
+        "Accept": "application/json",
+        "X-API-Key": "srfx_live_your_api_key",
+    },
     timeout=20,
 )
 
 print(response.json())`;
     case "php":
       return `<?php
-$response = file_get_contents("${url}");
+$context = stream_context_create([
+    "http" => [
+        "header" => "Accept: application/json\\r\\nX-API-Key: srfx_live_your_api_key\\r\\n"
+    ]
+]);
+$response = file_get_contents("${url}", false, $context);
 $data = json_decode($response, true);
 
 print_r($data);`;
@@ -397,7 +409,10 @@ import "package:http/http.dart" as http;
 
 final response = await http.get(
   Uri.parse("${url}"),
-  headers: {"Accept": "application/json"},
+  headers: {
+    "Accept": "application/json",
+    "X-API-Key": "srfx_live_your_api_key",
+  },
 );
 
 final data = jsonDecode(response.body);
@@ -648,6 +663,7 @@ export default function DocsPage() {
           {[
             ["Overview", "#overview"],
             ["Quick Start", "#quick-start"],
+            ["API Keys", "#api-keys"],
             ["Explorer", "#explorer"],
             ["Endpoints", "#endpoints"],
             ["Errors", "#errors"],
@@ -711,6 +727,53 @@ export default function DocsPage() {
             </div>
 
             <CodeBlock code={buildSnippet(endpoints[0], "curl")} />
+          </div>
+        </section>
+
+
+
+        <section id="api-keys" className="mt-16 space-y-6">
+          <SectionTitle
+            eyebrow="API Keys"
+            title="Secure access for developer integrations"
+            description="Public endpoints remain backwards compatible, but Savvy Rilla FX now supports API-key authentication for managed developer access, quotas, analytics, and future commercial plans."
+          />
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-6">
+              <h3 className="text-lg font-semibold text-white">Header authentication</h3>
+              <p className="mt-3 text-sm leading-6 text-zinc-400">
+                Send your key using X-API-Key. Authorization: Bearer is also supported.
+              </p>
+              <code className="mt-5 block overflow-x-auto rounded-2xl border border-white/10 bg-black/60 p-4 text-xs text-zinc-300">
+                X-API-Key: srfx_live_your_api_key
+              </code>
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-6">
+              <h3 className="text-lg font-semibold text-white">Key environments</h3>
+              <p className="mt-3 text-sm leading-6 text-zinc-400">
+                Keys are prefixed by environment so test and production traffic are easy to distinguish.
+              </p>
+              <div className="mt-5 space-y-2 font-mono text-xs text-zinc-300">
+                <p>srfx_test_...</p>
+                <p>srfx_live_...</p>
+                <p>srfx_admin_...</p>
+              </div>
+            </div>
+
+            <div className="rounded-3xl border border-white/10 bg-white/[0.035] p-6">
+              <h3 className="text-lg font-semibold text-white">Developer portal</h3>
+              <p className="mt-3 text-sm leading-6 text-zinc-400">
+                Admins can create, revoke, and monitor keys from the internal API key console.
+              </p>
+              <a
+                href="/admin/api-keys"
+                className="mt-5 inline-flex rounded-full bg-white px-4 py-2 text-sm font-semibold text-black hover:bg-white/90"
+              >
+                Open API key console
+              </a>
+            </div>
           </div>
         </section>
 

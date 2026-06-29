@@ -12,6 +12,9 @@ export function logApiRequest(context: ApiContext, status: number): void {
     durationMs: getDurationMs(context),
     requestId: context.requestId,
     ip: context.ip,
+    authMode: context.authMode,
+    apiKeyId: context.apiKey?.id ?? null,
+    developerId: context.apiKey?.developerId ?? null,
   };
 
   if (status >= 500) {

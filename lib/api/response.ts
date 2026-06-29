@@ -1,12 +1,19 @@
 import { NextResponse } from "next/server";
 import { buildApiHeaders, getDurationMs, type ApiCacheMode } from "./headers";
 import { logApiRequest } from "./logger";
+import { recordApiUsage } from "./usage";
 import type { ApiContext } from "./request-id";
 
 export type ApiErrorCode =
   | "BAD_DATA"
+  | "API_KEY_EXPIRED"
+  | "API_KEY_LOOKUP_FAILED"
+  | "API_KEY_REQUIRED"
+  | "API_KEY_REVOKED"
   | "BAD_REQUEST"
+  | "DEVELOPER_DISABLED"
   | "DB_ERROR"
+  | "INVALID_API_KEY"
   | "INVALID_CURRENCY"
   | "INVALID_PARAMETER"
   | "MISSING_PARAMETER"
@@ -26,6 +33,7 @@ export function apiJson<T extends Record<string, unknown>>(
 ) {
   const status = options?.status ?? 200;
   logApiRequest(context, status);
+  recordApiUsage(context, status);
 
   return NextResponse.json(
     {
@@ -54,6 +62,7 @@ export function apiError(
   details?: unknown
 ) {
   logApiRequest(context, status);
+  recordApiUsage(context, status);
 
   return NextResponse.json(
     {

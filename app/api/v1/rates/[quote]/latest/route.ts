@@ -1,27 +1,24 @@
 // app/api/v1/rates/[quote]/latest/route.ts
 import { NextRequest } from "next/server";
-import { createApiContext } from "@/lib/api/request-id";
 import { apiError, apiJson } from "@/lib/api/response";
-import { apiOptions } from "@/lib/api/middleware";
-import { applyRateLimit } from "@/lib/api/rate-limit";
+import { apiOptions, withApiProtection, type RouteContext } from "@/lib/api/middleware";
 import { isCurrencyCode, normalizeCurrencyCode } from "@/lib/api/validation";
 import { supabaseServer } from "@/lib/supabase/server";
 
 
 export const OPTIONS = apiOptions;
 
-export async function GET(
+export const GET = withApiProtection(async function GET(
   req: NextRequest,
-  contextParams: { params: Promise<{ quote: string }> }
+  context,
+  routeContext?: RouteContext,
 ) {
-  const context = createApiContext(req);
-  const rateLimited = applyRateLimit(req, context);
-  if (rateLimited) return rateLimited;
   const supabase = supabaseServer;
   const url = new URL(req.url);
   const baseCurrency = normalizeCurrencyCode(url.searchParams.get("base"), "SSP");
 
-  const { quote } = await contextParams.params;
+  const params = routeContext?.params as Promise<{ quote: string }> | { quote: string } | undefined;
+  const { quote } = params ? await params : { quote: "USD" };
   const quoteCurrency = normalizeCurrencyCode(quote, "USD");
 
   if (!isCurrencyCode(baseCurrency) || !isCurrencyCode(quoteCurrency)) {
@@ -86,4 +83,4 @@ export async function GET(
     is_manual_override: latestRow.is_manual_override,
     source_id: latestRow.source_id,
   });
-}
+});

@@ -1,9 +1,8 @@
 // app/api/v1/rates/history/route.ts
 import { NextRequest } from "next/server";
-import { createApiContext, type ApiContext } from "@/lib/api/request-id";
+import type { ApiContext } from "@/lib/api/request-id";
 import { apiError, apiJson } from "@/lib/api/response";
-import { apiOptions } from "@/lib/api/middleware";
-import { applyRateLimit } from "@/lib/api/rate-limit";
+import { apiOptions, withApiProtection } from "@/lib/api/middleware";
 import {
   isCurrencyCode,
   isIsoDate,
@@ -97,10 +96,7 @@ function validateDateRange(context: ApiContext, from: string, to: string) {
   return null;
 }
 
-export async function GET(req: NextRequest) {
-  const context = createApiContext(req);
-  const rateLimited = applyRateLimit(req, context);
-  if (rateLimited) return rateLimited;
+export const GET = withApiProtection(async function GET(req: NextRequest, context) {
   const url = new URL(req.url);
 
   const base = normalizeCurrencyCode(url.searchParams.get("base"), "SSP");
@@ -207,4 +203,4 @@ export async function GET(req: NextRequest) {
     points,
     meta: { from, to, count: points.length },
   });
-}
+});

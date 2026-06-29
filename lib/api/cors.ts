@@ -30,8 +30,10 @@ export function buildCorsHeaders(context: ApiContext): Record<string, string> {
 
   return {
     ...(allowedOrigin ? { "Access-Control-Allow-Origin": allowedOrigin } : {}),
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Request-ID",
+    "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type, X-API-Key, X-Request-ID",
+    "Access-Control-Expose-Headers":
+      "X-API-Version, X-FX-API-Version, X-Request-ID, X-Response-Time, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
   };

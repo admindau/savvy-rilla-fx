@@ -7,6 +7,19 @@ export type RateLimitInfo = {
   resetSeconds: number;
 };
 
+export type ApiKeyContext = {
+  id: string;
+  developerId: string | null;
+  prefix: string;
+  name: string | null;
+  environment: "test" | "live" | "admin" | string;
+  plan: string | null;
+  scopes: string[];
+  rateLimitPerMinute: number | null;
+  dailyQuota: number | null;
+  monthlyQuota: number | null;
+};
+
 export function getRequestId(req: NextRequest): string {
   const inbound = req.headers.get("x-request-id")?.trim();
   if (inbound) return inbound;
@@ -40,7 +53,10 @@ export function createApiContext(req: NextRequest) {
     path: url.pathname,
     origin: req.headers.get("origin"),
     ip: getClientIp(req),
+    userAgent: req.headers.get("user-agent"),
     rateLimit: null as RateLimitInfo | null,
+    apiKey: null as ApiKeyContext | null,
+    authMode: "public" as "public" | "api_key",
   };
 }
 
