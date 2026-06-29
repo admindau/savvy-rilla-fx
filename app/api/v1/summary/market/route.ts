@@ -1,6 +1,7 @@
 // app/api/v1/summary/market/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import {
+  buildMarketHealthFromSummary,
   buildMarketSummaryFromRows,
   type FxRatePoint,
 } from "@/lib/fx/insights";
@@ -110,10 +111,19 @@ export async function GET(req: NextRequest) {
       history: (historyRows ?? []) as FxDailyRow[],
     });
 
-    return NextResponse.json(summary, {
-      status: 200,
-      headers: VERSION_HEADERS,
-    });
+    const marketHealth = buildMarketHealthFromSummary(summary);
+
+    return NextResponse.json(
+      {
+        ...summary,
+        marketHealth,
+        market_health: marketHealth,
+      },
+      {
+        status: 200,
+        headers: VERSION_HEADERS,
+      }
+    );
   } catch (error) {
     console.error("[FX] /summary/market intelligence error", error);
     return NextResponse.json(

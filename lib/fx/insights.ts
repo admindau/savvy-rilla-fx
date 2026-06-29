@@ -66,11 +66,32 @@ export type MarketRange = {
   spread_pct: number | null;
 };
 
+export type MarketHealthLabel =
+  | "Excellent"
+  | "Stable"
+  | "Moderate"
+  | "Volatile"
+  | "Highly Volatile"
+  | "Thin Data";
+
+export type MarketHealthTone = "positive" | "neutral" | "warning" | "danger";
+
+export type MarketHealthComponent = {
+  name: string;
+  score: number;
+  weight: number;
+  note: string;
+};
+
 export type MarketHealth = {
   score: number;
-  label: "Stable" | "Watch" | "Volatile" | "Thin Data";
-  tone: "positive" | "neutral" | "warning";
+  label: MarketHealthLabel;
+  status: MarketHealthLabel;
+  color: "emerald" | "lime" | "amber" | "orange" | "red" | "zinc";
+  tone: MarketHealthTone;
+  description: string;
   drivers: string[];
+  components: MarketHealthComponent[];
 };
 
 export type FxRatePoint = {
@@ -284,54 +305,183 @@ export function buildMarketSummaryFromRows(params: {
 export function buildMarketHealthFromSummary(
   summary: MarketSummary | null
 ): MarketHealth {
+  const thinDataHealth: MarketHealth = {
+    score: 50,
+    label: "Thin Data",
+    status: "Thin Data",
+    color: "zinc",
+    tone: "neutral",
+    description:
+      "Not enough market data is available to calculate a confident health signal.",
+    drivers: [
+      "Not enough market data is available to calculate a confident signal.",
+    ],
+    components: [
+      {
+        name: "Data availability",
+        score: 50,
+        weight: 100,
+        note: "Additional observations are required for a stronger signal.",
+      },
+    ],
+  };
+
   if (!summary || !summary.mid_rate || summary.mid_rate <= 0) {
-    return {
-      score: 50,
-      label: "Thin Data",
-      tone: "neutral",
-      drivers: [
-        "Not enough market data is available to calculate a confident signal.",
-      ],
-    };
+    return thinDataHealth;
   }
 
   const drivers: string[] = [];
-  let score = 82;
+  const components: MarketHealthComponent[] = [];
+
+  const component = (
+    name: string,
+    score: number,
+    weight: number,
+    note: string
+  ) => {
+    const normalizedScore = Math.round(clamp(score, 0, 100));
+    components.push({ name, score: normalizedScore, weight, note });
+    return normalizedScore * (weight / 100);
+  };
 
   const dailyChange = summary.changes?.daily_pct ?? summary.change_pct_vs_previous;
+  let weightedScore = 0;
+
   if (dailyChange === null || Number.isNaN(dailyChange)) {
-    score -= 8;
+    weightedScore += component(
+      "Daily movement",
+      58,
+      20,
+      "Previous-day movement is not yet available."
+    );
     drivers.push("Previous-day movement is not yet available.");
   } else {
     const absDaily = Math.abs(dailyChange);
     if (absDaily < 0.1) {
-      score += 4;
+      weightedScore += component(
+        "Daily movement",
+        94,
+        20,
+        "Daily movement is minimal."
+      );
       drivers.push("Daily movement is minimal, supporting a stable reading.");
     } else if (absDaily < 0.5) {
-      score -= 3;
+      weightedScore += component(
+        "Daily movement",
+        78,
+        20,
+        "Daily movement is moderate."
+      );
       drivers.push("Daily movement is moderate and worth monitoring.");
-    } else {
-      score -= 12;
+    } else if (absDaily < 1.5) {
+      weightedScore += component(
+        "Daily movement",
+        55,
+        20,
+        "Daily movement is elevated."
+      );
       drivers.push("Daily movement is elevated versus the previous fixing.");
+    } else {
+      weightedScore += component(
+        "Daily movement",
+        35,
+        20,
+        "Daily movement is highly elevated."
+      );
+      drivers.push("Daily movement is highly elevated versus the previous fixing.");
     }
   }
 
-  const rangeHigh = summary.ranges?.thirty_day?.high ?? summary.range?.high ?? 0;
-  const rangeLow = summary.ranges?.thirty_day?.low ?? summary.range?.low ?? 0;
-  if (rangeHigh > 0 && rangeLow > 0 && rangeHigh >= rangeLow) {
+  const sevenDayChange = summary.changes?.seven_day_pct ?? summary.trend?.change_pct ?? null;
+  if (sevenDayChange === null || Number.isNaN(sevenDayChange)) {
+    weightedScore += component(
+      "7-day stability",
+      60,
+      20,
+      "Seven-day trend data is limited."
+    );
+    drivers.push("Seven-day stability data is limited.");
+  } else {
+    const absSeven = Math.abs(sevenDayChange);
+    if (absSeven < 0.35) {
+      weightedScore += component(
+        "7-day stability",
+        92,
+        20,
+        "The seven-day move is contained."
+      );
+      drivers.push("The seven-day movement remains contained.");
+    } else if (absSeven < 1.25) {
+      weightedScore += component(
+        "7-day stability",
+        76,
+        20,
+        "The seven-day move is moderate."
+      );
+      drivers.push("The seven-day movement is moderate.");
+    } else if (absSeven < 3) {
+      weightedScore += component(
+        "7-day stability",
+        54,
+        20,
+        "The seven-day move is elevated."
+      );
+      drivers.push("The seven-day movement is elevated.");
+    } else {
+      weightedScore += component(
+        "7-day stability",
+        34,
+        20,
+        "The seven-day move is sharp."
+      );
+      drivers.push("The seven-day movement is sharp.");
+    }
+  }
+
+  const rangeHigh = summary.ranges?.thirty_day?.high ?? summary.range?.high ?? null;
+  const rangeLow = summary.ranges?.thirty_day?.low ?? summary.range?.low ?? null;
+  if (rangeHigh !== null && rangeLow !== null && rangeHigh > 0 && rangeLow > 0 && rangeHigh >= rangeLow) {
     const rangePct = ((rangeHigh - rangeLow) / summary.mid_rate) * 100;
     if (rangePct < 1) {
-      score += 6;
+      weightedScore += component(
+        "30-day range",
+        94,
+        20,
+        "The recent range remains tight."
+      );
       drivers.push("The recent trading range remains tight.");
     } else if (rangePct < 3) {
-      score -= 2;
+      weightedScore += component(
+        "30-day range",
+        78,
+        20,
+        "The recent range is moderate."
+      );
       drivers.push("The recent trading range is moderate.");
-    } else {
-      score -= 10;
+    } else if (rangePct < 6) {
+      weightedScore += component(
+        "30-day range",
+        56,
+        20,
+        "The recent range is wide."
+      );
       drivers.push("The recent trading range is wide for this market.");
+    } else {
+      weightedScore += component(
+        "30-day range",
+        35,
+        20,
+        "The recent range is very wide."
+      );
+      drivers.push("The recent trading range is very wide for this market.");
     }
   } else {
-    score -= 6;
+    weightedScore += component(
+      "30-day range",
+      58,
+      20,
+      "Range data is incomplete."
+    );
     drivers.push("Range data is incomplete for the selected window.");
   }
 
@@ -339,54 +489,135 @@ export function buildMarketHealthFromSummary(
     summary.signals?.volatility_label ??
     classifyVolatility(summary.volatility?.avg_daily_move_pct ?? null);
 
-  if (volatilityLabel === "very low" || volatilityLabel === "low") {
-    score += 5;
-    drivers.push(`Average daily volatility is ${volatilityLabel}.`);
+  if (volatilityLabel === "very low") {
+    weightedScore += component(
+      "Volatility",
+      95,
+      25,
+      "Average daily volatility is very low."
+    );
+    drivers.push("Average daily volatility is very low.");
+  } else if (volatilityLabel === "low") {
+    weightedScore += component(
+      "Volatility",
+      88,
+      25,
+      "Average daily volatility is low."
+    );
+    drivers.push("Average daily volatility is low.");
   } else if (volatilityLabel === "elevated") {
-    score -= 8;
+    weightedScore += component(
+      "Volatility",
+      58,
+      25,
+      "Average daily volatility is elevated."
+    );
     drivers.push("Average daily volatility is elevated.");
   } else if (volatilityLabel === "high") {
-    score -= 16;
+    weightedScore += component(
+      "Volatility",
+      34,
+      25,
+      "Average daily volatility is high."
+    );
     drivers.push("Average daily volatility is high.");
   } else {
-    score -= 5;
+    weightedScore += component(
+      "Volatility",
+      60,
+      25,
+      "Volatility data is not yet available."
+    );
     drivers.push("Volatility data is not yet available.");
   }
 
+  const trendStrength = summary.signals?.trend_strength ?? "unknown";
   const trendLabel = summary.trend?.label ?? "Range-Bound";
-  if (trendLabel.toLowerCase().includes("range")) {
-    score += 3;
+  if (trendLabel === "Range-Bound") {
+    weightedScore += component(
+      "Trend consistency",
+      88,
+      15,
+      "Trend signal remains range-bound."
+    );
     drivers.push("Trend signal remains range-bound.");
+  } else if (trendStrength === "weak") {
+    weightedScore += component(
+      "Trend consistency",
+      80,
+      15,
+      `Trend signal is ${trendLabel.toLowerCase()} but weak.`
+    );
+    drivers.push(`Trend signal currently reads ${trendLabel}, but strength is weak.`);
+  } else if (trendStrength === "moderate") {
+    weightedScore += component(
+      "Trend consistency",
+      65,
+      15,
+      `Trend signal is ${trendLabel.toLowerCase()} and moderate.`
+    );
+    drivers.push(`Trend signal currently reads ${trendLabel} with moderate strength.`);
+  } else if (trendStrength === "strong") {
+    weightedScore += component(
+      "Trend consistency",
+      48,
+      15,
+      `Trend signal is ${trendLabel.toLowerCase()} and strong.`
+    );
+    drivers.push(`Trend signal currently reads ${trendLabel} with strong directional pressure.`);
   } else {
-    score -= 4;
-    drivers.push(`Trend signal currently reads ${trendLabel}.`);
+    weightedScore += component(
+      "Trend consistency",
+      62,
+      15,
+      "Trend strength is not yet available."
+    );
+    drivers.push("Trend strength is not yet available.");
   }
 
-  const finalScore = Math.round(clamp(score, 0, 100));
+  const finalScore = Math.round(clamp(weightedScore, 0, 100));
 
-  if (finalScore >= 75) {
-    return {
-      score: finalScore,
-      label: "Stable",
-      tone: "positive",
-      drivers: drivers.slice(0, 3),
-    };
-  }
+  let label: MarketHealthLabel;
+  let color: MarketHealth["color"];
+  let tone: MarketHealthTone;
+  let description: string;
 
-  if (finalScore >= 55) {
-    return {
-      score: finalScore,
-      label: "Watch",
-      tone: "neutral",
-      drivers: drivers.slice(0, 3),
-    };
+  if (finalScore >= 90) {
+    label = "Excellent";
+    color = "lime";
+    tone = "positive";
+    description = "The market is showing very strong stability across recent movement, range, volatility, and trend signals.";
+  } else if (finalScore >= 75) {
+    label = "Stable";
+    color = "emerald";
+    tone = "positive";
+    description = "The market is broadly stable, with limited stress across the main short-term indicators.";
+  } else if (finalScore >= 60) {
+    label = "Moderate";
+    color = "amber";
+    tone = "neutral";
+    description = "The market is generally manageable but showing signals that should be monitored.";
+  } else if (finalScore >= 40) {
+    label = "Volatile";
+    color = "orange";
+    tone = "warning";
+    description = "The market is showing elevated movement or range conditions and should be watched closely.";
+  } else {
+    label = "Highly Volatile";
+    color = "red";
+    tone = "danger";
+    description = "The market is showing significant stress across recent movement, volatility, or trend conditions.";
   }
 
   return {
     score: finalScore,
-    label: "Volatile",
-    tone: "warning",
-    drivers: drivers.slice(0, 3),
+    label,
+    status: label,
+    color,
+    tone,
+    description,
+    drivers: drivers.slice(0, 4),
+    components,
   };
 }
 
